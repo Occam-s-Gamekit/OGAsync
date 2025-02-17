@@ -108,7 +108,7 @@ bool FOGFutureBasicTest::RunTest(const FString& Parameters)
             return FString::Printf(TEXT("%d"), Value);
         };
         
-        TOGFuture<FString> TransformedFuture = Future.WeakTransform<FString>(ContextObject, TransformLambda);
+        TOGFuture<FString> TransformedFuture = Future.WeakThen<FString>(ContextObject, TransformLambda);
         
         int Value = 42;
         Promise.Fulfill(Value);
@@ -288,10 +288,10 @@ bool FOGFutureContinuationTest::RunTest(const FString& Parameters)
         FString FinalResult;
         
         auto TransformedFuture = Promise
-            .WeakTransform<float>(ContextObject, [](const int& Value) {
+            .WeakThen<float>(ContextObject, [](const int& Value) {
                 return Value * 1.5f;
             })
-            .WeakTransform<FString>(ContextObject, [](const float& Value) {
+            .WeakThen<FString>(ContextObject, [](const float& Value) {
                 return FString::Printf(TEXT("%.1f"), Value);
             });
 
@@ -425,7 +425,8 @@ bool FOGFutureDestructionTest::RunTest(const FString& Parameters)
 
     // Test 1: Promise Destruction While Pending
     {
-        TOGFuture<int> Future;
+        //manually initialize to empty future 
+        TOGFuture<int> Future(nullptr);
         bool CatchExecuted = false;
         FString CaughtReason;
         
@@ -449,7 +450,7 @@ bool FOGFutureDestructionTest::RunTest(const FString& Parameters)
 
     // Test 2: Promise Destruction After Fulfillment
     {
-        TOGFuture<int> Future;
+        TOGFuture<int> Future(nullptr);
         bool CatchExecuted = false;
         
         {
@@ -473,7 +474,7 @@ bool FOGFutureDestructionTest::RunTest(const FString& Parameters)
 
     // Test 3: Promise Destruction After Rejection
     {
-        TOGFuture<int> Future;
+        TOGFuture<int> Future(nullptr);
         int CatchCount = 0;
         
         {
@@ -494,8 +495,8 @@ bool FOGFutureDestructionTest::RunTest(const FString& Parameters)
 
     // Test 4: Multiple Futures Surviving Promise
     {
-        TOGFuture<int> Future1;
-        TOGFuture<int> Future2;
+        TOGFuture<int> Future1(nullptr);
+        TOGFuture<int> Future2(nullptr);
         int CatchCount = 0;
         
         {
@@ -516,6 +517,168 @@ bool FOGFutureDestructionTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("Both catch handlers should execute"), CatchCount, 2);
         TestTrue(TEXT("First future should be rejected"), Future1.IsRejected());
         TestTrue(TEXT("Second future should be rejected"), Future2.IsRejected());
+    }
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureAsyncChainTest, "OGAsync.Futures.AsyncChain",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FOGFutureAsyncChainTest::RunTest(const FString& Parameters)
+{
+    FTestWorldWrapper WorldWrapper;
+    WorldWrapper.CreateTestWorld(EWorldType::Game);
+    UWorld* World = WorldWrapper.GetTestWorld();
+    if (!World)
+        return false;
+    
+    AActor* ContextObject = World->SpawnActor<AActor>();
+    ON_SCOPE_EXIT{ContextObject->Destroy();};
+
+    // Test 1: Basic Future Chain
+    {
+        TOGPromise<int> InitialPromise;
+        TOGPromise<int> SecondPromise;
+        TOGPromise<int> ThirdPromise;
+        TArray<FString> ExecutionOrder;
+        
+        auto Future = InitialPromise.WeakChain(ContextObject, [&]()->FOGPromise {return SecondPromise;})
+        .WeakChain(ContextObject, [&]() -> FOGFuture
+        {
+            ExecutionOrder.Add(TEXT("Second"));
+            return ThirdPromise;
+        }).WeakThen(ContextObject, [&]() {
+            ExecutionOrder.Add(TEXT("Third"));
+        });
+        
+        // Start the chain
+        InitialPromise.Fulfill(1);
+        
+        TestEqual(TEXT("Only first step should execute"), ExecutionOrder.Num(), 1);
+        TestEqual(TEXT("First step executed"), ExecutionOrder[0], TEXT("First"));
+        
+        // Complete second promise
+        SecondPromise.Fulfill(2);
+        
+        TestEqual(TEXT("Two steps should be complete"), ExecutionOrder.Num(), 2);
+        TestEqual(TEXT("Second step executed"), ExecutionOrder[1], TEXT("Second"));
+        
+        // Complete final promise
+        ThirdPromise.Fulfill(3);
+        
+        TestEqual(TEXT("All steps complete"), ExecutionOrder.Num(), 3);
+        TestEqual(TEXT("Third step executed"), ExecutionOrder[2], TEXT("Third"));
+    }
+
+    // Test 2: Error Handling in Chain
+    {
+        TOGPromise<int> FirstPromise;
+        TOGPromise<int> SecondPromise;
+        
+        TArray<FString> ExecutionOrder;
+        
+        auto Future = FirstPromise
+            .WeakChain(ContextObject, [&]() -> FOGFuture {
+                ExecutionOrder.Add(TEXT("First"));
+                return SecondPromise;
+            })
+            .WeakThen(ContextObject, [&]() {
+                ExecutionOrder.Add(TEXT("Should Not Execute"));
+            })
+            .Catch(FOGFutureState::FCatchDelegate::CreateLambda([&](const FString& Reason) {
+                ExecutionOrder.Add(TEXT("Catch"));
+            }));
+        
+        FirstPromise.Fulfill(1);
+        SecondPromise.Throw(TEXT("Test Error"));
+        
+        TestEqual(TEXT("Only first and catch should execute"), ExecutionOrder.Num(), 2);
+        TestEqual(TEXT("First step executed"), ExecutionOrder[0], TEXT("First"));
+        TestEqual(TEXT("Catch executed"), ExecutionOrder[1], TEXT("Catch"));
+    }
+
+    // Test 3: Nested Future Chains
+    {
+        TOGPromise<int> OuterPromise;
+        TOGPromise<int> InnerPromise1;
+        TOGPromise<int> InnerPromise2;
+        
+        TArray<FString> ExecutionOrder;
+        
+        auto Future = OuterPromise.WeakChain(ContextObject, [&]() -> FOGFuture {
+            ExecutionOrder.Add(TEXT("Outer"));
+            return InnerPromise1.WeakChain(ContextObject, [&]() -> FOGFuture {
+                ExecutionOrder.Add(TEXT("Inner1"));
+                return InnerPromise2;
+            }).WeakThen(ContextObject, [&]() {
+                ExecutionOrder.Add(TEXT("Inner2"));
+            });
+        });
+        
+        OuterPromise.Fulfill(1);
+        TestEqual(TEXT("Outer executed"), ExecutionOrder[0], TEXT("Outer"));
+        
+        InnerPromise1.Fulfill(2);
+        TestEqual(TEXT("Inner1 executed"), ExecutionOrder[1], TEXT("Inner1"));
+        
+        InnerPromise2.Fulfill(3);
+        TestEqual(TEXT("Inner2 executed"), ExecutionOrder[2], TEXT("Inner2"));
+        
+        TestEqual(TEXT("All steps executed in order"), ExecutionOrder.Num(), 3);
+    }
+
+    // Test 4: Multiple Async Operations
+    {
+        TOGPromise<int> Promise1;
+        TOGPromise<int> Promise2;
+        TOGPromise<int> Promise3;
+        
+        int Sum = 0;
+        
+        auto Future = Promise1.WeakChain(ContextObject, [&]() -> FOGFuture {
+            Sum += 1;
+            return Promise2;
+        }).WeakChain(ContextObject, [&]() -> FOGFuture {
+            Sum += 2;
+            return Promise3;
+        }).WeakThen(ContextObject, [&]() {
+            Sum += 3;
+        });
+        
+        Promise1.Fulfill(1);
+        TestEqual(TEXT("First addition"), Sum, 1);
+        
+        Promise3.Fulfill(3);  // Complete out of order
+        TestEqual(TEXT("No change when completing future step early"), Sum, 1);
+        
+        Promise2.Fulfill(2);
+        TestEqual(TEXT("All steps complete"), Sum, 6);
+    }
+
+    // Test 5: Chain with Invalid Context
+    {
+        TOGPromise<int> Promise1;
+        TOGPromise<int> Promise2;
+        
+        TArray<FString> ExecutionOrder;
+        
+        auto Future = Promise1.WeakChain(ContextObject, [&]() -> FOGFuture {
+            ExecutionOrder.Add(TEXT("First"));
+            return Promise2;
+        }).WeakThen(ContextObject, [&]() {
+            ExecutionOrder.Add(TEXT("Second"));
+        });
+        
+        Promise1.Fulfill(1);
+        TestEqual(TEXT("First step executed"), ExecutionOrder[0], TEXT("First"));
+        
+        // Invalidate context
+        ContextObject->Destroy();
+        
+        Promise2.Fulfill(2);
+        TestEqual(TEXT("Second step should not execute with invalid context"), 
+                 ExecutionOrder.Num(), 1);
     }
 
     return true;

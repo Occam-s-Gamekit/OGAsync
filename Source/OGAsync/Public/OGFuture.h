@@ -58,7 +58,7 @@ struct TOGPromise;
  * of the internal data and functionality that promises and futures rely on.
  */
 
-struct FOGFutureState
+struct OGASYNC_API FOGFutureState
 {
 	typedef TSharedPtr<FOGFutureState> FSharedStatePtr;
 	friend struct FOGFuture;
@@ -329,14 +329,33 @@ public: \
     \
 	const FOGFuture Then(const typename FOGFutureState::FVoidThenDelegate& Callback) const \
 	{ \
-		if (!IsValid()) [[unlikely]]\
+		if (!IsValid()) [[unlikely]] \
 			return FOGFuture::EmptyFuture; \
 		return FOGFuture(SharedState->AddVoidThen(Callback)); \
 	} \
 	const FOGFuture WeakThen(const UObject* Context, TFunction<void()> Lambda) const \
 	{ \
-		return Then(typename FOGFutureState::FVoidThenDelegate::CreateWeakLambda(Context, Lambda)); \
+		return Then(FOGFutureState::FVoidThenDelegate::CreateWeakLambda(Context, Lambda)); \
 	} \
+	\
+	const FOGFuture WeakChain(const UObject* Context, TFunction<FOGFuture()> AsyncLambda) const \
+	{ \
+		if (!IsValid()) [[unlikely]] \
+			return FOGFuture::EmptyFuture; \
+		\
+		TSharedRef<TOGFutureState<void>> NextState = MakeShared<TOGFutureState<void>>(); \
+		FOGFuture NextFuture(NextState); \
+		\
+		WeakThen(Context, [Context, NextState, AsyncLambda]() mutable \
+		{ \
+			TFunction<void()> ThenFunc = [NextState]() mutable { NextState->SetFutureValue(); }; \
+			TFunction<void(const FString&)> CatchFunc = [NextState](const FString& Reason) mutable { NextState->Throw(Reason); };\
+			AsyncLambda().WeakThen(Context, ThenFunc).WeakCatch( Context, CatchFunc); \
+		}); \
+		WeakCatch(Context, [NextState](const FString& Reason) mutable { NextState->Throw(Reason); }); \
+		return NextFuture; \
+	} \
+	\
     const FOGFuture Catch(const typename FOGFutureState::FCatchDelegate& Callback) const \
     { \
         if (!IsValid()) \
@@ -391,9 +410,29 @@ public: \
 		return FOGFuture::EmptyFuture; \
 	return TOGFuture<T>(SharedState->AddVoidThen(Callback)); \
 	} \
+	\
 	const TOGFuture<T> WeakThen(const UObject* Context, TFunction<void()> Lambda) const \
 	{ \
 		return Then(typename FOGFutureState::FVoidThenDelegate::CreateWeakLambda(Context, Lambda)); \
+	} \
+	\
+	const TOGFuture<void> WeakChain(const UObject* Context, TFunction<FOGFuture()> AsyncLambda) const \
+	{ \
+		if (!IsValid()) [[unlikely]] \
+			return FOGFuture::EmptyFuture; \
+		\
+		TSharedRef<TOGFutureState<void>> NextState = MakeShared<TOGFutureState<void>>(); \
+		TOGFuture<void> NextFuture(NextState); \
+		\
+		WeakThen(Context, [Context, NextState, AsyncLambda]() mutable \
+		{ \
+			AsyncLambda().WeakThen(Context, [NextState]() mutable \
+			{ \
+				NextState->SetFutureValue(); \
+			}).WeakCatch(Context, [NextState](const FString& Reason) mutable { NextState->Throw(Reason); }); \
+		}); \
+		WeakCatch(Context, [NextState](const FString& Reason) mutable { NextState->Throw(Reason); }); \
+		return NextFuture; \
 	} \
 	\
     const TOGFuture<T> Then(const typename TOGFutureState<T>::FThenDelegate& Callback) const \
@@ -412,7 +451,7 @@ public: \
     } \
     \
     template<typename U> \
-    const TOGFuture<U> WeakTransform(const UObject* Context, TFunction<U(const T&)> TransformLambda) const \
+    const TOGFuture<U> WeakThen(const UObject* Context, TFunction<U(const T&)> TransformLambda) const \
     { \
         if (!IsValid()) [[unlikely]]\
             return FOGFuture::EmptyFuture; \
@@ -420,15 +459,33 @@ public: \
         TSharedRef<TOGFutureState<U>> TransformedState = MakeShared<TOGFutureState<U>>(); \
         TOGFuture<U> TransformFuture(TransformedState); \
         \
-        TFunction<void(const T&)> Lambda = [TransformedState, TransformLambda](const T& Value) mutable \
-        { \
-            U TransformedValue = TransformLambda(Value); \
-            TransformedState->SetFutureValue(TransformedValue); \
-        }; \
-        \
-        WeakThen(Context, Lambda); \
+		WeakThen(Context, [TransformedState, TransformLambda](const T& Value) mutable \
+		{ \
+			U TransformedValue = TransformLambda(Value); \
+			TransformedState->SetFutureValue(TransformedValue); \
+		}); \
+		WeakCatch(Context, [TransformedState](const FString& Reason) mutable { TransformedState->Throw(Reason); }); \
         return TransformFuture; \
-    }
+    } \
+	template<typename U> \
+	const TOGFuture<U> WeakThen(const UObject* Context, TFunction<TOGFuture<U>(const T&)> AsyncTransformLambda) const \
+	{ \
+		if (!IsValid()) [[unlikely]]\
+			return FOGFuture::EmptyFuture; \
+		\
+		TSharedRef<TOGFutureState<U>> TransformNextState = MakeShared<TOGFutureState<U>>(); \
+		TOGFuture<U> TransformNextFuture(TransformNextState); \
+		\
+		WeakThen(Context, [Context, TransformNextState, AsyncTransformLambda](const T& Value) mutable \
+		{ \
+			AsyncTransformLambda(Value).WeakThen(Context, [TransformNextState](const U& TransformedValue) mutable \
+			{ \
+				TransformNextState->SetFutureValue(TransformedValue); \
+			}).WeakCatch(Context, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); }); \
+		}); \
+		WeakCatch(Context, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); }); \
+	return TransformNextFuture; \
+	}
 
 USTRUCT(BlueprintType)
 struct OGASYNC_API FOGFuture
@@ -445,26 +502,12 @@ struct OGASYNC_API FOGFuture
 
 	template<typename T>
 	operator const TOGFuture<T>() const;
-
+	
 	//common implementations between FFuture and FPromise
 	FUTURE_METHODS()
 
 protected:
 	TSharedPtr<FOGFutureState> SharedState = nullptr;
-};
-
-template<typename T>
-struct TOGFuture : FOGFuture
-{
-	friend struct TOGPromise<T>;
-
-public:
-	//Futures are created via other futures or an existing future state.
-	TOGFuture() : FOGFuture(nullptr) {}
-	TOGFuture(const FOGFutureState::FSharedStatePtr& FutureState) : FOGFuture(FutureState) {}
-
-	//common implementations between TFuture and TPromise
-	TYPED_FUTURE_METHODS()
 };
 
 template<>
@@ -476,6 +519,24 @@ public:
 	//Futures are created via other futures or an existing future state.
 	TOGFuture() = delete;
 	TOGFuture(const FOGFutureState::FSharedStatePtr& FutureState) : FOGFuture(FutureState) {}
+};
+
+template<typename T>
+struct TOGFuture : FOGFuture
+{
+	friend struct TOGPromise<T>;
+
+public:
+	//Make it difficult to create a future that can never be filled.
+	//If you need an empty TOGFuture variable, you can manually initialize an empty future with
+	//TOGFuture<T> Future(nullptr)
+	//or
+	//TOGFuture<T> Future = FOGFuture::EmptyFuture
+	TOGFuture() = delete;
+	TOGFuture(const FOGFutureState::FSharedStatePtr& FutureState) : FOGFuture(FutureState) {}
+
+	//common implementations between TFuture and TPromise
+	TYPED_FUTURE_METHODS()
 };
 
 USTRUCT(BlueprintType)
@@ -505,7 +566,7 @@ struct OGASYNC_API FOGPromise
 			return;
 		SharedState->Throw(Reason);
 	}
-
+	
 	FUTURE_METHODS()
 
 protected:
@@ -518,13 +579,14 @@ struct TOGPromise : FOGPromise
 {
 public:
 	typedef TOGFuture<T> TFutureType;
-	
+
+	template<typename NoRawObjectPtr = T UE_REQUIRES(!std::is_convertible_v<T, UObject*>)>
 	TOGPromise() : FOGPromise(MakeShared<TOGFutureState<T>>()) {}
 	~TOGPromise()
 	{
 		if (IsValid() && IsPending())
 		{
-			Throw(TEXT("Promise was deleted before it was fulfilled or failed"));
+			Throw(TEXT("Promise was destroyed before it was fulfilled or failed"));
 		}
 	}
 
@@ -619,7 +681,7 @@ FOGFuture::operator TOGFuture<T>()
 	}
 	
 	return TOGFuture<T>(SharedState);
-}
+};
 
 template <typename T>
 FOGFuture::operator const TOGFuture<T>() const
@@ -632,4 +694,4 @@ FOGFuture::operator const TOGFuture<T>() const
 	}
 	
 	return TOGFuture<T>(SharedState);
-}
+};

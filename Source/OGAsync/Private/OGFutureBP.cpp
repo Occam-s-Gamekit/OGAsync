@@ -3,7 +3,7 @@
 
 #include "OGFutureBP.h"
 
-void UOGFutureBP::ExecuteLatentAction(FLatentActionInfo& LatentInfo)
+void UOGFutureBP_Typed::ExecuteLatentAction(FLatentActionInfo& LatentInfo)
 {
 	if (LatentInfo.Linkage != INDEX_NONE)
 	{
