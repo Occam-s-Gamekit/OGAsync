@@ -58,6 +58,8 @@ struct TOGPromise;
  * of the internal data and functionality that promises and futures rely on.
  */
 
+extern OGASYNC_API TArray<TSharedPtr<FOGFutureState>> ErrorStates;
+
 USTRUCT(BlueprintType)
 struct OGASYNC_API FOGFuture
 {
@@ -67,7 +69,7 @@ struct OGASYNC_API FOGFuture
 
 	static const FOGFuture EmptyFuture;
 
-	FOGFutureState const* operator->() const { return SharedState.Get(); }
+	FOGFutureState const* operator->() const;
 	
 	//convert a generic future into a specific type, will error if the type doesn't match the underlying data
 	template<typename T>
@@ -83,14 +85,15 @@ struct OGASYNC_API FOGFuture
 
 protected:
 
-	template<typename T> \
-	TOGFutureState<T>* GetTypedState() const \
-	{ \
-		if (!IsValid()) \
-			return nullptr; \
-		TOGFutureState<T>* TypedState = static_cast<TOGFutureState<T>*>(SharedState.Get()); \
-		ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type")); \
-		return TypedState; \
+	template<typename T>
+	TOGFutureState<T>* GetTypedState() const
+	{
+		if (!IsValid()) [[unlikely]]
+			return TOGFutureState<T>::GetErrorState();
+		TOGFutureState<T>* TypedState = static_cast<TOGFutureState<T>*>(SharedState.Get());
+		if(!ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type"))) [[unlikely]]
+			return TOGFutureState<T>::GetErrorState();
+		return TypedState;
 	}
 	
 	TSharedPtr<FOGFutureState> SharedState = nullptr;
@@ -142,9 +145,10 @@ protected:
 	TOGFutureState<T>* GetTypedState() const
 	{
 		if (!IsValid())
-			return nullptr;
+			return TOGFutureState<T>::GetErrorState();
 		TOGFutureState<T>* TypedState = static_cast<TOGFutureState<T>*>(SharedState.Get());
-		ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type"));
+		if(!ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type")))
+			return TOGFutureState<T>::GetErrorState();
 		return TypedState;
 	}
 	
@@ -215,13 +219,13 @@ public:
 	}
 
 	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func>>)>
-	FOGFuture WeakThen(const UObject* Context, Func Lambda) const
+	FOGFuture WeakThen(const UObject* Context, Func&& Lambda) const
 	{
 		return AddVoidThen(FVoidThenDelegate::CreateWeakLambda(Context, Lambda));
 	}
 
 	template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
-	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture AsyncLambda) const;
+	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture&& AsyncLambda) const;
 	
 	void Throw(const FString& Reason)
 	{
@@ -239,14 +243,14 @@ public:
 	}
 
 	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func, const FString&>>)>
-	FOGFuture WeakCatch(const UObject* Context, Func Lambda) const
+	FOGFuture WeakCatch(const UObject* Context, Func&& Lambda) const
 	{
 		return Catch(FCatchDelegate::CreateWeakLambda(Context, Lambda));
 	}
 
 	//convenience that allows you to bind then and catch in a single call
 	template<typename ThenFunc, typename CatchFunc>
-	FOGFuture WeakThen(const UObject* Context, ThenFunc ThenLambda, CatchFunc CatchLambda) const
+	FOGFuture WeakThen(const UObject* Context, ThenFunc&& ThenLambda, CatchFunc&& CatchLambda) const
 	{
 		WeakCatch(Context, CatchLambda);
 		return WeakThen(Context, ThenLambda);
@@ -334,6 +338,7 @@ protected:
 template<>
 struct TOGFutureState<void> : FOGFutureState
 {
+	friend struct FOGFuture;
 	friend struct TOGFuture<void>;
 	friend struct FOGPromise;
 	friend struct TOGPromise<void>;
@@ -348,13 +353,13 @@ public:
 	}
 
 	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func>>)>
-	TOGFuture<void> WeakThen(const UObject* Context, Func Lambda) const
+	TOGFuture<void> WeakThen(const UObject* Context, Func&& Lambda) const
 	{
 		return Then(FVoidThenDelegate::CreateWeakLambda(Context, Lambda));
 	}
 
 	template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
-	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture AsyncLambda) const
+	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture&& AsyncLambda) const
 	{
 		return FOGFutureState::WeakThen(Context, AsyncLambda);
 	}
@@ -365,14 +370,14 @@ public:
 	}
 
 	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func, const FString&>>)>
-	TOGFuture<void> WeakCatch(const UObject* Context, Func Lambda) const
+	TOGFuture<void> WeakCatch(const UObject* Context, Func&& Lambda) const
 	{
 		return Catch(FCatchDelegate::CreateWeakLambda(Context, Lambda));
 	}
 
 	//convenience that allows you to bind then and catch in a single call
 	template<typename ThenFunc, typename CatchFunc>
-	TOGFuture<void> WeakThen(const UObject* Context, ThenFunc ThenLambda, CatchFunc CatchLambda) const
+	TOGFuture<void> WeakThen(const UObject* Context, ThenFunc&& ThenLambda, CatchFunc&& CatchLambda) const
 	{
 		WeakCatch(Context, CatchLambda);
 		return WeakThen(Context, ThenLambda);
@@ -421,11 +426,29 @@ protected:
 		}
 		return ContinuationFutureState;
 	}
+
+	static TOGFutureState* GetErrorState()
+	{
+		for (TSharedPtr<FOGFutureState> SharedError : ErrorStates)
+		{
+			if (TOGFutureState* TypedState = static_cast<TOGFutureState*>(SharedError.Get()))
+				return TypedState;
+		}
+		const TSharedPtr<TOGFutureState> ErrorState = MakeShared<TOGFutureState>();
+		ErrorState->Throw(TEXT("Promise/Future access error, data is either invalid or the wrong type."));
+		ErrorStates.Add(ErrorState);
+		return ErrorState.Get();
+	}
 };
 
 template<typename T>
 struct TOGFutureState : FOGFutureState
 {
+	friend struct FOGFuture;
+	friend struct TOGFuture<T>;
+	friend struct FOGPromise;
+	friend struct TOGPromise<T>;
+	
 	DECLARE_DELEGATE_OneParam(FThenDelegate, const T&);
 
 	TOGFutureState(){}
@@ -448,13 +471,13 @@ public:
 	}
 	
 	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func>>)>
-	TOGFuture<T> WeakThen(const UObject* Context, Func Lambda) const
+	TOGFuture<T> WeakThen(const UObject* Context, Func&& Lambda) const
 	{
 		return Then(FVoidThenDelegate::CreateWeakLambda(Context, Lambda));
 	}
 	
 	template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
-	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture AsyncLambda) const
+	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture&& AsyncLambda) const
 	{
 		return FOGFutureState::WeakThen(Context, AsyncLambda);
 	}
@@ -465,13 +488,13 @@ public:
 	}
 
 	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func, const T&>>)>
-	TOGFuture<T> WeakThen(const UObject* Context, Func LambdaWithParam) const
+	TOGFuture<T> WeakThen(const UObject* Context, Func&& LambdaWithParam) const
 	{
 		return Then(FThenDelegate::CreateWeakLambda(Context, LambdaWithParam));
 	}
 
 	template<typename U, typename ReturnsU UE_REQUIRES(std::is_same_v<TInvokeResult_T<ReturnsU, const T&>, U>)>
-	TOGFuture<U> WeakThen(const UObject* Context, ReturnsU TransformLambda) const
+	TOGFuture<U> WeakThen(const UObject* Context, ReturnsU&& TransformLambda) const
 	{
 		TSharedRef<TOGFutureState<U>> TransformedState = MakeShared<TOGFutureState<U>>();
 		TOGFuture<U> TransformFuture(TransformedState);
@@ -487,7 +510,7 @@ public:
 	}
 
 	template<typename U, typename ReturnsFutureU UE_REQUIRES(std::is_same_v<TInvokeResult_T<ReturnsFutureU, const T&>, TOGFuture<U>>)>
-	TOGFuture<U> WeakThen(const UObject* Context, ReturnsFutureU AsyncTransformLambda) const
+	TOGFuture<U> WeakThen(const UObject* Context, ReturnsFutureU&& AsyncTransformLambda) const
 	{
 		TSharedRef<TOGFutureState<U>> TransformNextState = MakeShared<TOGFutureState<U>>();
 		TOGFuture<U> TransformNextFuture(TransformNextState);
@@ -509,14 +532,14 @@ public:
 	}
 	
 	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func, const FString&>>)>
-	TOGFuture<T> WeakCatch(const UObject* Context, Func Lambda) const
+	TOGFuture<T> WeakCatch(const UObject* Context, Func&& Lambda) const
 	{
 		return Catch(FCatchDelegate::CreateWeakLambda(Context, Lambda));
 	}
 
 	//convenience that allows you to bind then and catch in a single call
 	template<typename ThenFunc, typename CatchFunc>
-	TOGFuture<T> WeakThen(const UObject* Context, ThenFunc ThenLambda, CatchFunc CatchLambda) const
+	TOGFuture<T> WeakThen(const UObject* Context, ThenFunc&& ThenLambda, CatchFunc&& CatchLambda) const
 	{
 		WeakCatch(Context, CatchLambda);
 		return WeakThen(Context, ThenLambda);
@@ -524,7 +547,7 @@ public:
 
 	void Fulfill(const T& Value)
 	{
-		if(!ensure(State == EState::Pending && !ResultValue.IsSet())) [[unlikely]]
+		if(!ensureAlways(State == EState::Pending && !ResultValue.IsSet())) [[unlikely]]
 			return;
 		
 		ResultValue.Emplace(Value);
@@ -591,6 +614,19 @@ protected:
 		}
 		return ContinuationFutureState;
 	}
+
+	static TOGFutureState* GetErrorState()
+	{
+		for (TSharedPtr<FOGFutureState> SharedError : ErrorStates)
+		{
+			if (TOGFutureState* TypedState = static_cast<TOGFutureState*>(SharedError.Get()))
+				return TypedState;
+		}
+		const TSharedPtr<TOGFutureState> ErrorState = MakeShared<TOGFutureState>();
+		ErrorState->Throw(TEXT("Promise/Future access error, data is either invalid or the wrong type."));
+		ErrorStates.Add(ErrorState);
+		return ErrorState.Get();
+	}
 	
 private:
 	// Store the actual value once fulfilled
@@ -599,42 +635,6 @@ private:
 	// Typed callbacks
 	mutable TArray<FThenDelegate> ThenCallbacks;
 };
-
-/*
-template<>
-struct TOGPromise<void> : FOGPromise
-{
-public:
-	typedef TOGFuture<void> TFutureType;
-	
-	TOGPromise() : FOGPromise(MakeShared<TOGFutureState<void>>()) {}
-
-	//Promises can not be copied, this is to ensure only one system is expected to fulfill the promise.
-	TOGPromise(const TOGPromise&) = delete;
-	TOGPromise& operator=(const TOGPromise&) = delete;
-	//Promises can be moved, but it clears the Other promise
-	TOGPromise(const TOGPromise&& Other) noexcept : FOGPromise(Other.SharedState)
-	{
-		Other.SharedState = nullptr;
-	}
-	TOGPromise& operator=(const TOGPromise&& Other) noexcept
-	{
-		if (this != &Other)
-		{
-			SharedState = Other.SharedState;
-			Other.SharedState = nullptr;
-		}
-		return *this;
-	}
-
-	//implicit conversion to TOGFuture
-	operator TOGFuture<void>() const
-	{
-		return TOGFuture<void>(SharedState);
-	}
-
-	TOGFutureState<void>* operator->() const { return GetTypedState<void>(); }
-};*/
 
 template <typename T>
 FOGFuture::operator TOGFuture<T>()
@@ -672,7 +672,7 @@ TOGPromise<T>::~TOGPromise()
 }
 
 template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
-	TOGFuture<void> FOGFutureState::WeakThen(const UObject* Context, ReturnsFuture AsyncLambda) const
+	TOGFuture<void> FOGFutureState::WeakThen(const UObject* Context, ReturnsFuture&& AsyncLambda) const
 {
 	//Create a raw promise to avoid complications related to lambda capture and deleted copy constructor
 	TSharedPtr<TOGFutureState<void>> NextState = MakeShared<TOGFutureState<void>>();

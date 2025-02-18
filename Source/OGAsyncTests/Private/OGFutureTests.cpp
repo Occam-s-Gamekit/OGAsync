@@ -386,10 +386,10 @@ bool FOGFutureEdgeCasesTest::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureMultipleAssignmentTest, "OGAsync.Futures.MultipleAssignment",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureErrorsDoNotCrash, "OGAsync.Futures.ErrorsDoNotCrash",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::NegativeFilter)
 
-bool FOGFutureMultipleAssignmentTest::RunTest(const FString& Parameters)
+bool FOGFutureErrorsDoNotCrash::RunTest(const FString& Parameters)
 {
     // Test 1: Multiple Fulfill Attempts
     {
@@ -405,6 +405,23 @@ bool FOGFutureMultipleAssignmentTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("Only first fulfillment should count"), Future->GetValueSafe(), 84);
     }
 
+    // Test 2: Try to use promise after it's been moved
+    {
+        TOGPromise<int> Promise1;
+        TOGPromise<int> Promise2 = MoveTemp(Promise1);
+
+        //Fulfill should fail, but not crash
+        Promise1->Fulfill(5);
+    }
+
+    // Test 3: Create future as one type, then convert to another
+    {
+        TOGPromise<bool> Promise;
+        FOGFuture Future = Promise;
+        TOGFuture<int> FutureInt = Future;
+        int Result = FutureInt->GetValueSafe();
+    }
+    
     return true;
 }
 
