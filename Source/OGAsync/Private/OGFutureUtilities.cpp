@@ -13,7 +13,7 @@ FOGFuture UOGFutureUtilities::FutureAll(const UObject* Context, TArray<FOGFuture
 		WaitingForN--;
 		if (WaitingForN == 0)
 		{
-			FutureStateAll->SetFutureValue();
+			FutureStateAll->Fulfill();
 		}
 	};
 	const TFunction<void(const FString&)> CatchLambda = [FutureStateAll, &ErrorReceived](const FString& Reason)
@@ -24,10 +24,9 @@ FOGFuture UOGFutureUtilities::FutureAll(const UObject* Context, TArray<FOGFuture
 			FutureStateAll->Throw(Reason);
 		}
 	};
-	for (FOGFuture& InnerFuture : WaitForAll)
+	for (const FOGFuture& InnerFuture : WaitForAll)
     {
-    	(void)InnerFuture.WeakThen(Context, Lambda);
-		(void)InnerFuture.WeakCatch(Context, CatchLambda);
+    	(void)InnerFuture->WeakThen(Context, Lambda, CatchLambda);
     }
 	return TOGFuture<void>(FutureStateAll);
 }
@@ -42,7 +41,7 @@ FOGFuture UOGFutureUtilities::FutureAny(const UObject* Context, TArray<FOGFuture
 		if (!Complete)
 		{
 			Complete = true;
-			FutureStateAny->SetFutureValue();
+			FutureStateAny->Fulfill();
 		}
 	};
 	const TFunction<void(const FString&)> CatchLambda = [FutureStateAny, &WaitingForNErrors](const FString& Reason) mutable 
@@ -53,10 +52,9 @@ FOGFuture UOGFutureUtilities::FutureAny(const UObject* Context, TArray<FOGFuture
 			FutureStateAny->Throw(TEXT("All futures were thrown, can no longer complete"));
 		}
 	};
-	for (FOGFuture& InnerFuture : WaitForFirst)
+	for (const FOGFuture& InnerFuture : WaitForFirst)
 	{
-		(void)InnerFuture.WeakThen(Context, Lambda);
-		(void)InnerFuture.WeakCatch(Context, CatchLambda);
+		(void)InnerFuture->WeakThen(Context, Lambda, CatchLambda);
 	}
 	return TOGFuture<void>(FutureStateAny);
 }

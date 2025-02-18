@@ -58,443 +58,16 @@ struct TOGPromise;
  * of the internal data and functionality that promises and futures rely on.
  */
 
-struct OGASYNC_API FOGFutureState
-{
-	typedef TSharedPtr<FOGFutureState> FSharedStatePtr;
-	friend struct FOGFuture;
-	DECLARE_DELEGATE(FVoidThenDelegate);
-	DECLARE_DELEGATE_OneParam(FCatchDelegate, const FString&);
-
-	enum class EState
-	{
-		Pending,
-		Fulfilled,
-		Rejected
-	};
-	
-	FOGFutureState(){}
-	virtual ~FOGFutureState(){}
-
-public:
-	bool IsPending() const { return State == EState::Pending; }
-	bool IsFulfilled() const { return State == EState::Fulfilled; }
-	bool IsRejected() const { return State == EState::Rejected; }
-
-	FSharedStatePtr AddVoidThen(const FVoidThenDelegate& Callback)
-	{
-		switch (State)
-		{
-		case EState::Pending:
-			VoidThenCallbacks.Add(Callback);
-			break;
-		case EState::Fulfilled:
-			(void)Callback.ExecuteIfBound();
-			break;
-		default:
-			//do nothing
-				break;
-		}
-
-		return LazyGetContinuation();
-	}
-
-	FSharedStatePtr AddCatch(const FCatchDelegate& Callback)
-	{
-		switch (State)
-		{
-		case EState::Pending:
-			CatchCallbacks.Add(Callback);
-			break;
-		case EState::Rejected:
-			Callback.ExecuteIfBound(FailureReason.GetValue());
-			break;
-		default:
-			//Do nothing
-				break;
-		}
-		
-		return LazyGetContinuation();
-	}
-	
-	void Throw(const FString& Reason)
-	{
-		if (!ensure(State == EState::Pending) && !FailureReason.IsSet()) [[unlikely]]
-			return;
-
-		FailureReason.Emplace(Reason);
-		State = EState::Rejected;
-		ExecuteCatchCallbacks();
-	}
-	
-protected:
-
-	void ExecuteCatchCallbacks();
-
-	virtual void ClearCallbacks()
-	{
-        VoidThenCallbacks.Empty();
-        CatchCallbacks.Empty();
-	}
-	
-	virtual FSharedStatePtr LazyGetContinuation()
-	{
-		if (!ContinuationFutureState.IsValid())
-		{
-			ContinuationFutureState = MakeShared<FOGFutureState>();
-		}
-		return ContinuationFutureState;
-	}
-	
-protected:
-	EState State = EState::Pending;
-	
-	TOptional<FString> FailureReason;
-
-	// Callbacks that don't need type
-	TArray<FVoidThenDelegate> VoidThenCallbacks;
-	TArray<FCatchDelegate> CatchCallbacks;
-	
-	TSharedPtr<FOGFutureState> ContinuationFutureState;
-};
-
-template<typename T>
-struct TOGFutureState : FOGFutureState
-{
-	friend struct TOGFuture<T>;
-	friend struct FOGPromise;
-	friend struct TOGPromise<T>;
-
-	DECLARE_DELEGATE_OneParam(FThenDelegate, const T&);
-
-	TOGFutureState(){}
-	
-public:
-	const T& GetValue() const { return ResultValue.GetValue(); }
-
-	FSharedStatePtr AddThen(const FThenDelegate& Callback)
-	{
-		switch (State)
-		{
-		case EState::Pending:
-			ThenCallbacks.Add(Callback);
-			break;
-		case EState::Fulfilled:
-			Callback.ExecuteIfBound(ResultValue.GetValue());
-			break;
-		default:
-			//Do nothing
-			break;
-		}
-		
-		return LazyGetContinuation();
-	}
-	
-	void SetFutureValue(const T& Value)
-	{
-		if(!ensure(State == EState::Pending && !ResultValue.IsSet())) [[unlikely]]
-			return;
-		
-		ResultValue.Emplace(Value);
-		State = EState::Fulfilled;
-		ExecuteThenCallbacks();
-	}
-
-private:
-	// Execute all valid callbacks with the result value
-	void ExecuteThenCallbacks()
-	{
-		//Value set but still pending will only happen while delegates are being called.
-		if (!ensure(ResultValue.IsSet() && State == EState::Fulfilled)) [[unlikely]]
-			return;
-
-		T Result = ResultValue.GetValue();
-		for (FThenDelegate& Then : ThenCallbacks)
-		{
-			Then.ExecuteIfBound(Result);
-		}
-
-		for (FVoidThenDelegate& VoidThen : VoidThenCallbacks)
-		{
-			(void)VoidThen.ExecuteIfBound();
-		}
-
-		if (ContinuationFutureState.IsValid())
-		{
-			static_cast<TOGFutureState<T>*>(ContinuationFutureState.Get())->SetFutureValue(Result);
-		}
-		
-		ClearCallbacks();
-	}
-
-	virtual void ClearCallbacks() override
-	{
-		ThenCallbacks.Empty();
-		FOGFutureState::ClearCallbacks();
-	}
-
-	virtual FSharedStatePtr LazyGetContinuation() override
-	{
-		if (!ContinuationFutureState.IsValid())
-		{
-			ContinuationFutureState = MakeShared<TOGFutureState>();
-		}
-		return ContinuationFutureState;
-	}
-	
-private:
-	// Store the actual value once fulfilled
-	TOptional<T> ResultValue;
-	
-	// Typed callbacks
-	TArray<FThenDelegate> ThenCallbacks;
-};
-
-template<>
-struct TOGFutureState<void> : FOGFutureState
-{
-	friend struct TOGFuture<void>;
-	friend struct FOGPromise;
-	friend struct TOGPromise<void>;
-
-	TOGFutureState(){}
-	
-public:
-	FSharedStatePtr AddThen(const FVoidThenDelegate& Callback)
-	{
-		return AddVoidThen(Callback);
-	}
-	
-	void SetFutureValue()
-	{
-		if(!ensure(State == EState::Pending)) [[unlikely]]
-			return;
-		
-		State = EState::Fulfilled;
-		ExecuteThenCallbacks();
-	}
-
-private:
-	// Execute all valid callbacks with the result value
-	void ExecuteThenCallbacks()
-	{
-		//Value set but still pending will only happen while delegates are being called.
-		if (!ensure(State == EState::Fulfilled)) [[unlikely]]
-			return;
-
-		for (FVoidThenDelegate& VoidThen : VoidThenCallbacks)
-		{
-			(void)VoidThen.ExecuteIfBound();
-		}
-
-		if (ContinuationFutureState.IsValid())
-		{
-			static_cast<TOGFutureState<void>*>(ContinuationFutureState.Get())->SetFutureValue();
-		}
-		
-		ClearCallbacks();
-	}
-
-	virtual FSharedStatePtr LazyGetContinuation() override
-	{
-		if (!ContinuationFutureState.IsValid())
-		{
-			ContinuationFutureState = MakeShared<TOGFutureState>();
-		}
-		return ContinuationFutureState;
-	}
-};
-
-// Define shared methods that both Future and Promise will implement
-#define FUTURE_METHODS() \
-public: \
-    bool IsValid() const \
-    { \
-        return SharedState.IsValid(); \
-    } \
-    \
-    bool IsPending() const \
-    { \
-        return IsValid() && SharedState->IsPending(); \
-    } \
-    \
-    bool IsFulfilled() const \
-    { \
-        return IsValid() && SharedState->IsFulfilled(); \
-    } \
-    \
-    bool IsRejected() const \
-    { \
-        return IsValid() && SharedState->IsRejected(); \
-    } \
-    \
-	const FOGFuture Then(const typename FOGFutureState::FVoidThenDelegate& Callback) const \
-	{ \
-		if (!IsValid()) [[unlikely]] \
-			return FOGFuture::EmptyFuture; \
-		return FOGFuture(SharedState->AddVoidThen(Callback)); \
-	} \
-	const FOGFuture WeakThen(const UObject* Context, TFunction<void()> Lambda) const \
-	{ \
-		return Then(FOGFutureState::FVoidThenDelegate::CreateWeakLambda(Context, Lambda)); \
-	} \
-	\
-	const FOGFuture WeakChain(const UObject* Context, TFunction<FOGFuture()> AsyncLambda) const \
-	{ \
-		if (!IsValid()) [[unlikely]] \
-			return FOGFuture::EmptyFuture; \
-		\
-		TSharedRef<TOGFutureState<void>> NextState = MakeShared<TOGFutureState<void>>(); \
-		FOGFuture NextFuture(NextState); \
-		\
-		WeakThen(Context, [Context, NextState, AsyncLambda]() mutable \
-		{ \
-			TFunction<void()> ThenFunc = [NextState]() mutable { NextState->SetFutureValue(); }; \
-			TFunction<void(const FString&)> CatchFunc = [NextState](const FString& Reason) mutable { NextState->Throw(Reason); };\
-			AsyncLambda().WeakThen(Context, ThenFunc).WeakCatch( Context, CatchFunc); \
-		}); \
-		WeakCatch(Context, [NextState](const FString& Reason) mutable { NextState->Throw(Reason); }); \
-		return NextFuture; \
-	} \
-	\
-    const FOGFuture Catch(const typename FOGFutureState::FCatchDelegate& Callback) const \
-    { \
-        if (!IsValid()) \
-            return FOGFuture::EmptyFuture; \
-        return FOGFuture(SharedState->AddCatch(Callback)); \
-    } \
-    \
-    const FOGFuture WeakCatch(const UObject* Context, TFunction<void(const FString&)> Lambda) const \
-    { \
-		return Catch(typename FOGFutureState::FCatchDelegate::CreateWeakLambda(Context, Lambda)); \
-    } \
-    \
-protected: \
-    template<typename T> \
-    TOGFutureState<T>* GetTypedState() const \
-    { \
-        if (!IsValid()) \
-            return nullptr; \
-        TOGFutureState<T>* TypedState = static_cast<TOGFutureState<T>*>(SharedState.Get()); \
-        ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type")); \
-        return TypedState; \
-    }
-
-// Define shared methods for templated Future/Promise types
-#define TYPED_FUTURE_METHODS() \
-public: \
-	\
-	T GetSafe() const \
-	{ \
-		if (!IsValid() || !IsFulfilled()) \
-			return T(); \
-		TOGFutureState<T>* StatePtr = GetTypedState<T>(); \
-		if (!StatePtr) [[unlikely]]\
-			return T(); \
-		return StatePtr->GetValue(); \
-	} \
-	\
-    bool TryGet(T& OutValue) const \
-    { \
-        if (!IsValid() || !IsFulfilled()) \
-            return false; \
-        TOGFutureState<T>* StatePtr = GetTypedState<T>(); \
-        if (!StatePtr) [[unlikely]]\
-            return false; \
-        OutValue = StatePtr->GetValue(); \
-        return true; \
-    } \
-    \
-	const TOGFuture<T> Then(const typename FOGFutureState::FVoidThenDelegate& Callback) const \
-	{ \
-	if (!IsValid()) [[unlikely]]\
-		return FOGFuture::EmptyFuture; \
-	return TOGFuture<T>(SharedState->AddVoidThen(Callback)); \
-	} \
-	\
-	const TOGFuture<T> WeakThen(const UObject* Context, TFunction<void()> Lambda) const \
-	{ \
-		return Then(typename FOGFutureState::FVoidThenDelegate::CreateWeakLambda(Context, Lambda)); \
-	} \
-	\
-	const TOGFuture<void> WeakChain(const UObject* Context, TFunction<FOGFuture()> AsyncLambda) const \
-	{ \
-		if (!IsValid()) [[unlikely]] \
-			return FOGFuture::EmptyFuture; \
-		\
-		TSharedRef<TOGFutureState<void>> NextState = MakeShared<TOGFutureState<void>>(); \
-		TOGFuture<void> NextFuture(NextState); \
-		\
-		WeakThen(Context, [Context, NextState, AsyncLambda]() mutable \
-		{ \
-			AsyncLambda().WeakThen(Context, [NextState]() mutable \
-			{ \
-				NextState->SetFutureValue(); \
-			}).WeakCatch(Context, [NextState](const FString& Reason) mutable { NextState->Throw(Reason); }); \
-		}); \
-		WeakCatch(Context, [NextState](const FString& Reason) mutable { NextState->Throw(Reason); }); \
-		return NextFuture; \
-	} \
-	\
-    const TOGFuture<T> Then(const typename TOGFutureState<T>::FThenDelegate& Callback) const \
-    { \
-        if (!IsValid()) [[unlikely]]\
-            return FOGFuture::EmptyFuture; \
-        TOGFutureState<T>* StatePtr = GetTypedState<T>(); \
-        if (!StatePtr) [[unlikely]]\
-            return FOGFuture::EmptyFuture; \
-        return TOGFuture<T>(StatePtr->AddThen(Callback)); \
-    } \
-    \
-    const TOGFuture<T> WeakThen(const UObject* Context, TFunction<void(const T&)> Lambda) const \
-    { \
-        return Then(typename TOGFutureState<T>::FThenDelegate::CreateWeakLambda(Context, Lambda)); \
-    } \
-    \
-    template<typename U> \
-    const TOGFuture<U> WeakThen(const UObject* Context, TFunction<U(const T&)> TransformLambda) const \
-    { \
-        if (!IsValid()) [[unlikely]]\
-            return FOGFuture::EmptyFuture; \
-        \
-        TSharedRef<TOGFutureState<U>> TransformedState = MakeShared<TOGFutureState<U>>(); \
-        TOGFuture<U> TransformFuture(TransformedState); \
-        \
-		WeakThen(Context, [TransformedState, TransformLambda](const T& Value) mutable \
-		{ \
-			U TransformedValue = TransformLambda(Value); \
-			TransformedState->SetFutureValue(TransformedValue); \
-		}); \
-		WeakCatch(Context, [TransformedState](const FString& Reason) mutable { TransformedState->Throw(Reason); }); \
-        return TransformFuture; \
-    } \
-	template<typename U> \
-	const TOGFuture<U> WeakThen(const UObject* Context, TFunction<TOGFuture<U>(const T&)> AsyncTransformLambda) const \
-	{ \
-		if (!IsValid()) [[unlikely]]\
-			return FOGFuture::EmptyFuture; \
-		\
-		TSharedRef<TOGFutureState<U>> TransformNextState = MakeShared<TOGFutureState<U>>(); \
-		TOGFuture<U> TransformNextFuture(TransformNextState); \
-		\
-		WeakThen(Context, [Context, TransformNextState, AsyncTransformLambda](const T& Value) mutable \
-		{ \
-			AsyncTransformLambda(Value).WeakThen(Context, [TransformNextState](const U& TransformedValue) mutable \
-			{ \
-				TransformNextState->SetFutureValue(TransformedValue); \
-			}).WeakCatch(Context, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); }); \
-		}); \
-		WeakCatch(Context, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); }); \
-	return TransformNextFuture; \
-	}
-
 USTRUCT(BlueprintType)
 struct OGASYNC_API FOGFuture
 {
 	GENERATED_BODY()
 	FOGFuture() {}
-	FOGFuture(const FOGFutureState::FSharedStatePtr& FutureState) : SharedState(FutureState) {}
+	FOGFuture(const TSharedPtr<FOGFutureState>& FutureState) : SharedState(FutureState) {}
 
 	static const FOGFuture EmptyFuture;
+
+	FOGFutureState const* operator->() const { return SharedState.Get(); }
 	
 	//convert a generic future into a specific type, will error if the type doesn't match the underlying data
 	template<typename T>
@@ -502,23 +75,25 @@ struct OGASYNC_API FOGFuture
 
 	template<typename T>
 	operator const TOGFuture<T>() const;
-	
-	//common implementations between FFuture and FPromise
-	FUTURE_METHODS()
+
+	bool IsValid() const
+	{
+		return SharedState.IsValid();
+	}
 
 protected:
+
+	template<typename T> \
+	TOGFutureState<T>* GetTypedState() const \
+	{ \
+		if (!IsValid()) \
+			return nullptr; \
+		TOGFutureState<T>* TypedState = static_cast<TOGFutureState<T>*>(SharedState.Get()); \
+		ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type")); \
+		return TypedState; \
+	}
+	
 	TSharedPtr<FOGFutureState> SharedState = nullptr;
-};
-
-template<>
-struct TOGFuture<void> : FOGFuture
-{
-	friend struct TOGPromise<void>;
-
-public:
-	//Futures are created via other futures or an existing future state.
-	TOGFuture() = delete;
-	TOGFuture(const FOGFutureState::FSharedStatePtr& FutureState) : FOGFuture(FutureState) {}
 };
 
 template<typename T>
@@ -533,43 +108,46 @@ public:
 	//or
 	//TOGFuture<T> Future = FOGFuture::EmptyFuture
 	TOGFuture() = delete;
-	TOGFuture(const FOGFutureState::FSharedStatePtr& FutureState) : FOGFuture(FutureState) {}
+	TOGFuture(const TSharedPtr<FOGFutureState>& FutureState) : FOGFuture(FutureState) {}
 
-	//common implementations between TFuture and TPromise
-	TYPED_FUTURE_METHODS()
+	TOGFutureState<T>* operator->() const { return GetTypedState<T>(); }
 };
 
 USTRUCT(BlueprintType)
 struct OGASYNC_API FOGPromise
 {
+	friend class UOGFutureBP;
+	
 	GENERATED_BODY()
 	FOGPromise() {}
-	FOGPromise(const FOGFutureState::FSharedStatePtr& State) : SharedState(State) {}
+	FOGPromise(const TSharedPtr<FOGFutureState>& State) : SharedState(State) {}
 
 	operator FOGFuture() const
 	{
 		return FOGFuture(SharedState);
 	}
 
+	FOGFutureState* operator->() const { return SharedState.Get(); }
 	template<typename T>
-	void Fulfill(const T& Value)
-	{
-		TOGFutureState<T>* TypedState = GetTypedState<T>();
-		if (!TypedState) [[unlikely]]
-			return;
-		TypedState->SetFutureValue(Value);
-	}
+	TOGFutureState<T>* operator->() const { return GetTypedState<T>(); }
 
-	void Throw(const FString& Reason) const
+	bool IsValid() const
 	{
-		if(!IsValid())
-			return;
-		SharedState->Throw(Reason);
+		return SharedState.IsValid();
 	}
-	
-	FUTURE_METHODS()
 
 protected:
+
+	template<typename T>
+	TOGFutureState<T>* GetTypedState() const
+	{
+		if (!IsValid())
+			return nullptr;
+		TOGFutureState<T>* TypedState = static_cast<TOGFutureState<T>*>(SharedState.Get());
+		ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type"));
+		return TypedState;
+	}
+	
 	//Mutable so the copy constructor can null the src
 	mutable TSharedPtr<FOGFutureState> SharedState = nullptr;
 };
@@ -582,13 +160,7 @@ public:
 
 	template<typename NoRawObjectPtr = T UE_REQUIRES(!std::is_convertible_v<T, UObject*>)>
 	TOGPromise() : FOGPromise(MakeShared<TOGFutureState<T>>()) {}
-	~TOGPromise()
-	{
-		if (IsValid() && IsPending())
-		{
-			Throw(TEXT("Promise was destroyed before it was fulfilled or failed"));
-		}
-	}
+	~TOGPromise();
 
 	//Promises can not be copied, this is to ensure only one system is expected to fulfill the promise.
 	TOGPromise(const TOGPromise&) = delete;
@@ -614,19 +186,421 @@ public:
 		return TOGFuture<T>(SharedState);
 	}
 
-	void Fulfill(const T& Value)
-	{
-		if (!ensureAlwaysMsgf(IsValid(), TEXT("Trying to fulfill an empty promise"))) [[unlikely]]
-			return;
-		TOGFutureState<T>* StatePtr = GetTypedState<T>();
-		if (!StatePtr) [[unlikely]]
-			return;
-		StatePtr->SetFutureValue(Value);
-	}
-
-	TYPED_FUTURE_METHODS()
+	TOGFutureState<T>* operator->() const { return GetTypedState<T>(); }
 };
 
+struct OGASYNC_API FOGFutureState
+{
+	DECLARE_DELEGATE(FVoidThenDelegate);
+	DECLARE_DELEGATE_OneParam(FCatchDelegate, const FString&);
+
+	enum class EState
+	{
+		Pending,
+		Fulfilled,
+		Rejected
+	};
+	
+	FOGFutureState(){}
+	virtual ~FOGFutureState(){}
+
+public:
+	bool IsPending() const { return State == EState::Pending; }
+	bool IsFulfilled() const { return State == EState::Fulfilled; }
+	bool IsRejected() const { return State == EState::Rejected; }
+	
+	FOGFuture Then(const FVoidThenDelegate& Callback) const //intentionally hidden in children
+	{
+		return AddVoidThen(Callback);
+	}
+
+	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func>>)>
+	FOGFuture WeakThen(const UObject* Context, Func Lambda) const
+	{
+		return AddVoidThen(FVoidThenDelegate::CreateWeakLambda(Context, Lambda));
+	}
+
+	template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
+	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture AsyncLambda) const;
+	
+	void Throw(const FString& Reason)
+	{
+		if (!ensure(State == EState::Pending) && !FailureReason.IsSet()) [[unlikely]]
+			return;
+
+		FailureReason.Emplace(Reason);
+		State = EState::Rejected;
+		ExecuteCatchCallbacks();
+	}
+
+	FOGFuture Catch(const FCatchDelegate& Callback) const //intentionally hidden in children
+	{
+		return AddCatch(Callback);
+	}
+
+	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func, const FString&>>)>
+	FOGFuture WeakCatch(const UObject* Context, Func Lambda) const
+	{
+		return Catch(FCatchDelegate::CreateWeakLambda(Context, Lambda));
+	}
+
+	//convenience that allows you to bind then and catch in a single call
+	template<typename ThenFunc, typename CatchFunc>
+	FOGFuture WeakThen(const UObject* Context, ThenFunc ThenLambda, CatchFunc CatchLambda) const
+	{
+		WeakCatch(Context, CatchLambda);
+		return WeakThen(Context, ThenLambda);
+	}
+
+	virtual void ExecuteThenCallbacks() = 0;
+	void ExecuteCatchCallbacks()
+	{
+		//Value set but still pending will only happen while delegates are being called.
+		if (!ensure(State == EState::Rejected && FailureReason.IsSet())) [[unlikely]]
+			return;
+
+		const FString& Reason = FailureReason.GetValue();
+		for (FCatchDelegate& Catch : CatchCallbacks)
+		{
+			(void)Catch.ExecuteIfBound(Reason);
+		}
+
+		if (ContinuationFutureState.IsValid())
+		{
+			ContinuationFutureState->Throw(Reason);
+		}
+		
+		ClearCallbacks();
+	}
+
+	virtual void ClearCallbacks()
+	{
+        VoidThenCallbacks.Empty();
+        CatchCallbacks.Empty();
+	}
+	
+	virtual TSharedPtr<FOGFutureState> LazyGetContinuation() const = 0;
+	
+protected:
+
+	FOGFuture AddVoidThen(const FVoidThenDelegate& Callback) const
+	{
+		switch (State)
+		{
+		case EState::Pending:
+			VoidThenCallbacks.Add(Callback);
+			break;
+		case EState::Fulfilled:
+			(void)Callback.ExecuteIfBound();
+			break;
+		default:
+			//do nothing
+				break;
+		}
+
+		return LazyGetContinuation();
+	}
+
+	FOGFuture AddCatch(const FCatchDelegate& Callback) const
+	{
+		switch (State)
+		{
+		case EState::Pending:
+			CatchCallbacks.Add(Callback);
+			break;
+		case EState::Rejected:
+			(void)Callback.ExecuteIfBound(FailureReason.GetValue());
+			break;
+		default:
+			//Do nothing
+				break;
+		}
+		
+		return LazyGetContinuation();
+	}
+	
+	EState State = EState::Pending;
+	
+	TOptional<FString> FailureReason;
+
+	// Callbacks that don't need type
+	mutable TArray<FVoidThenDelegate> VoidThenCallbacks;
+	mutable TArray<FCatchDelegate> CatchCallbacks;
+	
+	mutable TSharedPtr<FOGFutureState> ContinuationFutureState;
+};
+
+//Void specialization of TOGFutureState - implement this first as TOGFutureState<void> uses it
+template<>
+struct TOGFutureState<void> : FOGFutureState
+{
+	friend struct TOGFuture<void>;
+	friend struct FOGPromise;
+	friend struct TOGPromise<void>;
+
+	TOGFutureState(){}
+
+public:
+	
+	TOGFuture<void> Then(const FVoidThenDelegate& Callback) const //intentionally hiding parent function
+	{
+		return FOGFutureState::Then(Callback);
+	}
+
+	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func>>)>
+	TOGFuture<void> WeakThen(const UObject* Context, Func Lambda) const
+	{
+		return Then(FVoidThenDelegate::CreateWeakLambda(Context, Lambda));
+	}
+
+	template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
+	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture AsyncLambda) const
+	{
+		return FOGFutureState::WeakThen(Context, AsyncLambda);
+	}
+
+	TOGFuture<void> Catch(const FCatchDelegate& Callback) const //intentionally hiding parent function
+	{
+		return FOGFutureState::Catch(Callback);
+	}
+
+	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func, const FString&>>)>
+	TOGFuture<void> WeakCatch(const UObject* Context, Func Lambda) const
+	{
+		return Catch(FCatchDelegate::CreateWeakLambda(Context, Lambda));
+	}
+
+	//convenience that allows you to bind then and catch in a single call
+	template<typename ThenFunc, typename CatchFunc>
+	TOGFuture<void> WeakThen(const UObject* Context, ThenFunc ThenLambda, CatchFunc CatchLambda) const
+	{
+		WeakCatch(Context, CatchLambda);
+		return WeakThen(Context, ThenLambda);
+	}
+	
+	void Fulfill()
+	{
+		if(!ensure(State == EState::Pending)) [[unlikely]]
+			return;
+		
+		State = EState::Fulfilled;
+		ExecuteThenCallbacks();
+	}
+
+protected:
+	TOGFuture<void> AddThen(const FVoidThenDelegate& Callback) const
+	{
+		return AddVoidThen(Callback);
+	}
+
+	// Execute all valid callbacks with the result value
+	virtual void ExecuteThenCallbacks() override
+	{
+		//Value set but still pending will only happen while delegates are being called.
+		if (!ensure(State == EState::Fulfilled)) [[unlikely]]
+			return;
+
+		for (FVoidThenDelegate& VoidThen : VoidThenCallbacks)
+		{
+			(void)VoidThen.ExecuteIfBound();
+		}
+
+		if (ContinuationFutureState.IsValid())
+		{
+			static_cast<TOGFutureState<void>*>(ContinuationFutureState.Get())->Fulfill();
+		}
+		
+		ClearCallbacks();
+	}
+
+	virtual TSharedPtr<FOGFutureState> LazyGetContinuation() const override
+	{
+		if (!ContinuationFutureState.IsValid())
+		{
+			ContinuationFutureState = MakeShared<TOGFutureState>();
+		}
+		return ContinuationFutureState;
+	}
+};
+
+template<typename T>
+struct TOGFutureState : FOGFutureState
+{
+	DECLARE_DELEGATE_OneParam(FThenDelegate, const T&);
+
+	TOGFutureState(){}
+	
+public:
+	const T& GetValueSafe() const { return ResultValue.GetValue(); }
+
+	bool TryGetValue(T& OutValue) const
+	{
+		if (!IsFulfilled())
+			return false;
+		OutValue = GetValueSafe();
+		return true;
+	}
+
+	
+	TOGFuture<T> Then(const FVoidThenDelegate& Callback) const //intentionally hiding parent function
+	{
+		return FOGFutureState::Then(Callback);
+	}
+	
+	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func>>)>
+	TOGFuture<T> WeakThen(const UObject* Context, Func Lambda) const
+	{
+		return Then(FVoidThenDelegate::CreateWeakLambda(Context, Lambda));
+	}
+	
+	template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
+	TOGFuture<void> WeakThen(const UObject* Context, ReturnsFuture AsyncLambda) const
+	{
+		return FOGFutureState::WeakThen(Context, AsyncLambda);
+	}
+	
+	TOGFuture<T> Then(const FThenDelegate& Callback) const //intentionally hiding parent function
+	{
+		return AddThen(Callback);
+	}
+
+	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func, const T&>>)>
+	TOGFuture<T> WeakThen(const UObject* Context, Func LambdaWithParam) const
+	{
+		return Then(FThenDelegate::CreateWeakLambda(Context, LambdaWithParam));
+	}
+
+	template<typename U, typename ReturnsU UE_REQUIRES(std::is_same_v<TInvokeResult_T<ReturnsU, const T&>, U>)>
+	TOGFuture<U> WeakThen(const UObject* Context, ReturnsU TransformLambda) const
+	{
+		TSharedRef<TOGFutureState<U>> TransformedState = MakeShared<TOGFutureState<U>>();
+		TOGFuture<U> TransformFuture(TransformedState);
+
+		WeakThen(Context, [TransformedState, TransformLambda](const T& Value) mutable
+		{
+			U TransformedValue = TransformLambda(Value);
+			TransformedState->Fulfill(TransformedValue);
+		});
+		
+		WeakCatch(Context, [TransformedState](const FString& Reason) mutable { TransformedState->Throw(Reason); });
+		return TransformFuture;
+	}
+
+	template<typename U, typename ReturnsFutureU UE_REQUIRES(std::is_same_v<TInvokeResult_T<ReturnsFutureU, const T&>, TOGFuture<U>>)>
+	TOGFuture<U> WeakThen(const UObject* Context, ReturnsFutureU AsyncTransformLambda) const
+	{
+		TSharedRef<TOGFutureState<U>> TransformNextState = MakeShared<TOGFutureState<U>>();
+		TOGFuture<U> TransformNextFuture(TransformNextState);
+		
+		WeakThen(Context, [Context, TransformNextState, AsyncTransformLambda](const T& Value) mutable
+		{
+			AsyncTransformLambda(Value).WeakThen(Context, [TransformNextState](const U& TransformedValue) mutable
+			{
+				TransformNextState->SetFutureValue(TransformedValue);
+			}).WeakCatch(Context, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); });
+		});
+		WeakCatch(Context, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); });
+		return TransformNextFuture;
+	}
+
+	TOGFuture<T> Catch(const FCatchDelegate& Callback) const //intentionally hiding parent function
+	{
+		return FOGFutureState::Catch(Callback);
+	}
+	
+	template<typename Func UE_REQUIRES(std::is_void_v<TInvokeResult_T<Func, const FString&>>)>
+	TOGFuture<T> WeakCatch(const UObject* Context, Func Lambda) const
+	{
+		return Catch(FCatchDelegate::CreateWeakLambda(Context, Lambda));
+	}
+
+	//convenience that allows you to bind then and catch in a single call
+	template<typename ThenFunc, typename CatchFunc>
+	TOGFuture<T> WeakThen(const UObject* Context, ThenFunc ThenLambda, CatchFunc CatchLambda) const
+	{
+		WeakCatch(Context, CatchLambda);
+		return WeakThen(Context, ThenLambda);
+	}
+
+	void Fulfill(const T& Value)
+	{
+		if(!ensure(State == EState::Pending && !ResultValue.IsSet())) [[unlikely]]
+			return;
+		
+		ResultValue.Emplace(Value);
+		State = EState::Fulfilled;
+		ExecuteThenCallbacks();
+	}
+	
+protected:
+	TOGFuture<T> AddThen(const FThenDelegate& Callback) const
+	{
+		switch (State)
+		{
+		case EState::Pending:
+			ThenCallbacks.Add(Callback);
+			break;
+		case EState::Fulfilled:
+			Callback.ExecuteIfBound(ResultValue.GetValue());
+			break;
+		default:
+			//Do nothing
+			break;
+		}
+		
+		return LazyGetContinuation();
+	}
+	
+	// Execute all valid callbacks with the result value
+	virtual void ExecuteThenCallbacks() override
+	{
+		//Value set but still pending will only happen while delegates are being called.
+		if (!ensure(ResultValue.IsSet() && State == EState::Fulfilled)) [[unlikely]]
+			return;
+
+		T Result = ResultValue.GetValue();
+		for (FThenDelegate& Then : ThenCallbacks)
+		{
+			Then.ExecuteIfBound(Result);
+		}
+
+		for (FVoidThenDelegate& VoidThen : VoidThenCallbacks)
+		{
+			(void)VoidThen.ExecuteIfBound();
+		}
+
+		if (ContinuationFutureState.IsValid())
+		{
+			static_cast<TOGFutureState<T>*>(ContinuationFutureState.Get())->Fulfill(Result);
+		}
+		
+		ClearCallbacks();
+	}
+
+	virtual void ClearCallbacks() override
+	{
+		ThenCallbacks.Empty();
+		FOGFutureState::ClearCallbacks();
+	}
+
+	virtual TSharedPtr<FOGFutureState> LazyGetContinuation() const override
+	{
+		if (!ContinuationFutureState.IsValid())
+		{
+			ContinuationFutureState = MakeShared<TOGFutureState>();
+		}
+		return ContinuationFutureState;
+	}
+	
+private:
+	// Store the actual value once fulfilled
+	TOptional<T> ResultValue;
+	
+	// Typed callbacks
+	mutable TArray<FThenDelegate> ThenCallbacks;
+};
+
+/*
 template<>
 struct TOGPromise<void> : FOGPromise
 {
@@ -659,16 +633,8 @@ public:
 		return TOGFuture<void>(SharedState);
 	}
 
-	void Fulfill() const
-	{
-		if (!ensureAlwaysMsgf(IsValid(), TEXT("Trying to fulfill an empty promise"))) [[unlikely]]
-			return;
-		TOGFutureState<void>* StatePtr = GetTypedState<void>();
-		if (!StatePtr) [[unlikely]]
-			return;
-		StatePtr->SetFutureValue();
-	}
-};
+	TOGFutureState<void>* operator->() const { return GetTypedState<void>(); }
+};*/
 
 template <typename T>
 FOGFuture::operator TOGFuture<T>()
@@ -681,7 +647,7 @@ FOGFuture::operator TOGFuture<T>()
 	}
 	
 	return TOGFuture<T>(SharedState);
-};
+}
 
 template <typename T>
 FOGFuture::operator const TOGFuture<T>() const
@@ -694,4 +660,40 @@ FOGFuture::operator const TOGFuture<T>() const
 	}
 	
 	return TOGFuture<T>(SharedState);
-};
+}
+
+template <typename T>
+TOGPromise<T>::~TOGPromise()
+{
+	if (IsValid() && SharedState->IsPending())
+	{
+		SharedState->Throw(TEXT("Promise was destroyed before it was fulfilled or failed"));
+	}
+}
+
+template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
+	TOGFuture<void> FOGFutureState::WeakThen(const UObject* Context, ReturnsFuture AsyncLambda) const
+{
+	//Create a raw promise to avoid complications related to lambda capture and deleted copy constructor
+	TSharedPtr<TOGFutureState<void>> NextState = MakeShared<TOGFutureState<void>>();
+	TOGFuture<void> NextFuture(NextState);
+		
+	WeakThen(Context,
+	[Context, NextState, AsyncLambda]() mutable
+		{
+			AsyncLambda()->WeakThen(Context,
+				[NextState]() mutable
+				{
+					NextState->Fulfill();
+				},
+				[NextState](const FString& Reason) mutable
+				{
+					NextState->Throw(Reason);
+				});
+		},
+	[NextState](const FString& Reason) mutable
+	{
+		NextState->Throw(Reason);
+	});
+	return NextFuture;
+}
