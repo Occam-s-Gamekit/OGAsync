@@ -128,9 +128,31 @@ public:
 		});
 	}
 
+	static void BindToLambda(FOGFuture InFuture, FLatentActionInfo LatentInfo)
+	{
+		const TOGFuture<void> Future = InFuture;
+		if (!Future.IsValid())
+			return;
+		Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo]() mutable
+		{
+			ExecuteLatentAction(LatentInfo);
+		});
+	}
+
 public:
-	//Typed promise functions
+	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
+	static FOGPromise MakePromiseVoid()
+	{ return MakePromise<void>(); }
 	
+	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
+	static void FulfillPromiseVoid(FOGPromise InPromise)
+	{ FulfillPromise(InPromise); }
+	
+	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
+	static void ThenVoid(FOGFuture InFuture, FLatentActionInfo LatentInfo)
+	{ BindToLambda(InFuture, LatentInfo); }
+
+	//Typed promise functions
 	DEFINE_BP_FUTURE_LIBRARY(Bool, bool);
 	DEFINE_BP_FUTURE_LIBRARY(Bools, TArray<bool>);
 	DEFINE_BP_FUTURE_LIBRARY(Int, int);

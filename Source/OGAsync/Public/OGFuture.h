@@ -103,6 +103,7 @@ template<typename T>
 struct TOGFuture : FOGFuture
 {
 	friend struct TOGPromise<T>;
+	typedef T Type;
 
 public:
 	//Make it difficult to create a future that can never be filled.
@@ -509,7 +510,7 @@ public:
 		return TransformFuture;
 	}
 
-	template<typename U, typename ReturnsFutureU UE_REQUIRES(std::is_same_v<TInvokeResult_T<ReturnsFutureU, const T&>, TOGFuture<U>>)>
+	template<typename ReturnsFutureU, typename U = typename TInvokeResult_T<ReturnsFutureU, const T&>::Type UE_REQUIRES(std::is_same_v<TInvokeResult_T<ReturnsFutureU, const T&>, TOGFuture<U>>)>
 	TOGFuture<U> WeakThen(const UObject* Context, ReturnsFutureU&& AsyncTransformLambda) const
 	{
 		TSharedRef<TOGFutureState<U>> TransformNextState = MakeShared<TOGFutureState<U>>();
@@ -517,12 +518,11 @@ public:
 		
 		WeakThen(Context, [Context, TransformNextState, AsyncTransformLambda](const T& Value) mutable
 		{
-			AsyncTransformLambda(Value).WeakThen(Context, [TransformNextState](const U& TransformedValue) mutable
+			AsyncTransformLambda(Value)->WeakThen(Context, [TransformNextState](const U& TransformedValue) mutable
 			{
-				TransformNextState->SetFutureValue(TransformedValue);
-			}).WeakCatch(Context, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); });
-		});
-		WeakCatch(Context, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); });
+				TransformNextState->Fulfill(TransformedValue);
+			}, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); });
+		}, [TransformNextState](const FString& Reason) mutable { TransformNextState->Throw(Reason); });
 		return TransformNextFuture;
 	}
 

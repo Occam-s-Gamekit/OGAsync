@@ -16,9 +16,10 @@ class OGASYNC_API UOGFutureUtilities : public UObject
 {
 	GENERATED_BODY()
 
+public:
 	UFUNCTION(Blueprintcallable, Category="OGAsync|Utility")
-	FOGFuture FutureAll(const UObject* Context, TArray<FOGFuture> WaitForAll);
+	static FOGFuture FutureAll(const UObject* Context, TArray<FOGFuture> WaitForAll);
 
 	UFUNCTION(Blueprintcallable, Category="OGAsync|Utility")
-	FOGFuture FutureAny(const UObject* Context, TArray<FOGFuture> WaitForFirst);
+	static FOGFuture FutureAny(const UObject* Context, TArray<FOGFuture> WaitForFirst);
 };

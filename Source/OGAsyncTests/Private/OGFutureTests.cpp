@@ -1,4 +1,5 @@
 ﻿#include "CoreMinimal.h"
+#include "OGFutureUtilities.h"
 #include "Misc/AutomationTest.h"
 #include "OGAsync/Public/OGFuture.h"
 #include "Tests/AutomationCommon.h"
@@ -676,7 +677,46 @@ bool FOGFutureAsyncChainTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("All steps complete"), Sum, 6);
     }
 
-    // Test 5: Chain with Invalid Context
+    // Test 5: Transform Future Chain
+    {
+        TOGPromise<int> InitialPromise;
+        TOGPromise<FString> SecondPromise;
+        TOGPromise<float> ThirdPromise;
+        TArray<FString> ExecutionOrder;
+        
+        auto Future = InitialPromise->WeakThen(ContextObject, [&](const int& Value)->TOGFuture<FString>
+        {
+            ExecutionOrder.Add(TEXT("First"));
+            return SecondPromise;
+        })
+        ->WeakThen(ContextObject, [&](const FString& Value) -> TOGFuture<float>
+        {
+            ExecutionOrder.Add(TEXT("Second"));
+            return ThirdPromise;
+        })->WeakThen(ContextObject, [&]() {
+            ExecutionOrder.Add(TEXT("Third"));
+        });
+        
+        // Start the chain
+        InitialPromise->Fulfill(1);
+        
+        TestEqual(TEXT("Only first step should execute"), ExecutionOrder.Num(), 1);
+        TestEqual(TEXT("First step executed"), ExecutionOrder[0], TEXT("First"));
+        
+        // Complete second promise
+        SecondPromise->Fulfill(TEXT("2"));
+        
+        TestEqual(TEXT("Two steps should be complete"), ExecutionOrder.Num(), 2);
+        TestEqual(TEXT("Second step executed"), ExecutionOrder[1], TEXT("Second"));
+        
+        // Complete final promise
+        ThirdPromise->Fulfill(3.0);
+        
+        TestEqual(TEXT("All steps complete"), ExecutionOrder.Num(), 3);
+        TestEqual(TEXT("Third step executed"), ExecutionOrder[2], TEXT("Third"));
+    }
+    
+    // Test 6: Chain with Invalid Context
     {
         TOGPromise<int> Promise1;
         TOGPromise<int> Promise2;
@@ -699,6 +739,177 @@ bool FOGFutureAsyncChainTest::RunTest(const FString& Parameters)
         Promise2->Fulfill(2);
         TestEqual(TEXT("Second step should not execute with invalid context"), 
                  ExecutionOrder.Num(), 1);
+    }
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureCombineTest, "OGAsync.Futures.Combine",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FOGFutureCombineTest::RunTest(const FString& Parameters)
+{
+    FTestWorldWrapper WorldWrapper;
+    WorldWrapper.CreateTestWorld(EWorldType::Game);
+    UWorld* World = WorldWrapper.GetTestWorld();
+    if (!World)
+        return false;
+    
+    AActor* ContextObject = World->SpawnActor<AActor>();
+    ON_SCOPE_EXIT{ContextObject->Destroy();};
+
+    // Test 1: FutureAll Basic Completion
+    {
+        TOGPromise<int> Promise1;
+        TOGPromise<int> Promise2;
+        TOGPromise<int> Promise3;
+        
+        TArray<FOGFuture> Futures;
+        Futures.Add(Promise1);
+        Futures.Add(Promise2);
+        Futures.Add(Promise3);
+        
+        bool AllComplete = false;
+        auto CombinedFuture = UOGFutureUtilities::FutureAll(ContextObject, Futures);
+        CombinedFuture->WeakThen(ContextObject, [&]() {
+            AllComplete = true;
+        });
+        
+        Promise1->Fulfill(1);
+        TestFalse(TEXT("All futures not complete yet"), AllComplete);
+        
+        Promise2->Fulfill(2);
+        TestFalse(TEXT("All futures not complete yet"), AllComplete);
+        
+        Promise3->Fulfill(3);
+        TestTrue(TEXT("All futures now complete"), AllComplete);
+    }
+
+    // Test 2: FutureAll Error Handling
+    {
+        TOGPromise<int> Promise1;
+        TOGPromise<int> Promise2;
+        TOGPromise<int> Promise3;
+        
+        TArray<FOGFuture> Futures;
+        Futures.Add(Promise1);
+        Futures.Add(Promise2);
+        Futures.Add(Promise3);
+        
+        bool CatchExecuted = false;
+        FString CaughtReason;
+        
+        auto CombinedFuture = UOGFutureUtilities::FutureAll(ContextObject, Futures);
+        CombinedFuture->Catch(FOGFutureState::FCatchDelegate::CreateLambda([&](const FString& Reason) {
+            CatchExecuted = true;
+            CaughtReason = Reason;
+        }));
+        
+        Promise1->Fulfill(1);
+        Promise2->Throw(TEXT("Test Error"));
+        Promise3->Fulfill(3);
+        
+        TestTrue(TEXT("Catch should execute when any future fails"), CatchExecuted);
+        TestTrue(TEXT("Error message should be preserved"), 
+                CaughtReason.Contains(TEXT("Test Error")));
+    }
+
+    // Test 3: FutureAny Basic Completion
+    {
+        TOGPromise<int> Promise1;
+        TOGPromise<int> Promise2;
+        TOGPromise<int> Promise3;
+        
+        TArray<FOGFuture> Futures;
+        Futures.Add(Promise1);
+        Futures.Add(Promise2);
+        Futures.Add(Promise3);
+        
+        bool AnyComplete = false;
+        auto CombinedFuture = UOGFutureUtilities::FutureAny(ContextObject, Futures);
+        CombinedFuture->WeakThen(ContextObject, [&]() {
+            AnyComplete = true;
+        });
+        
+        Promise2->Fulfill(2);
+        TestTrue(TEXT("Should complete when any future completes"), AnyComplete);
+    }
+
+    // Test 4: FutureAny Error Handling
+    {
+        TOGPromise<int> Promise1;
+        TOGPromise<int> Promise2;
+        TOGPromise<int> Promise3;
+        
+        TArray<FOGFuture> Futures;
+        Futures.Add(Promise1);
+        Futures.Add(Promise2);
+        Futures.Add(Promise3);
+        
+        bool CatchExecuted = false;
+        
+        auto CombinedFuture = UOGFutureUtilities::FutureAny(ContextObject, Futures);
+        CombinedFuture->Catch(FOGFutureState::FCatchDelegate::CreateLambda([&](const FString& Reason) {
+            CatchExecuted = true;
+        }));
+        
+        Promise1->Throw(TEXT("Error 1"));
+        TestFalse(TEXT("FutureAny shouldn't fail with one error"), CatchExecuted);
+        
+        Promise2->Throw(TEXT("Error 2"));
+        TestFalse(TEXT("FutureAny shouldn't fail with two errors"), CatchExecuted);
+        
+        Promise3->Throw(TEXT("Error 3"));
+        TestTrue(TEXT("FutureAny should fail when all futures fail"), CatchExecuted);
+    }
+
+    // Test 5: Empty Futures Array
+    {
+        TArray<FOGFuture> EmptyFutures;
+        
+        bool AllComplete = false;
+        bool AnyComplete = false;
+        
+        UOGFutureUtilities::FutureAll(ContextObject, EmptyFutures)->WeakThen(ContextObject, [&]() {
+            AllComplete = true;
+        });
+        
+        UOGFutureUtilities::FutureAny(ContextObject, EmptyFutures)->WeakThen(ContextObject, [&]() {
+            AnyComplete = true;
+        });
+        
+        TestTrue(TEXT("FutureAll should complete immediately with empty array"), AllComplete);
+        TestTrue(TEXT("FutureAny should complete immediately with empty array"), AnyComplete);
+    }
+
+    // Test 6: Mixed Completion and Errors
+    {
+        TOGPromise<int> Promise1;
+        TOGPromise<int> Promise2;
+        TOGPromise<int> Promise3;
+        
+        TArray<FOGFuture> Futures;
+        Futures.Add(Promise1);
+        Futures.Add(Promise2);
+        Futures.Add(Promise3);
+        
+        bool AnyCatchExecuted = false;
+        bool AllCatchExecuted = false;
+        
+        UOGFutureUtilities::FutureAny(ContextObject, Futures)->Catch(FOGFutureState::FCatchDelegate::CreateLambda([&](const FString& Reason) {
+            AnyCatchExecuted = true;
+        }));
+        
+        UOGFutureUtilities::FutureAll(ContextObject, Futures)->Catch(FOGFutureState::FCatchDelegate::CreateLambda([&](const FString& Reason) {
+            AllCatchExecuted = true;
+        }));
+        
+        Promise1->Fulfill(1);
+        Promise2->Throw(TEXT("Error"));
+        Promise3->Fulfill(3);
+        
+        TestFalse(TEXT("FutureAny shouldn't fail with mixed results"), AnyCatchExecuted);
+        TestTrue(TEXT("FutureAll should fail with any error"), AllCatchExecuted);
     }
 
     return true;
