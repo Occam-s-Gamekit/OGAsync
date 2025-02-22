@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include <typeinfo>
 #include "OGFuture.generated.h"
 
 struct FOGFutureState;
@@ -86,15 +87,7 @@ struct OGASYNC_API FOGFuture
 protected:
 
 	template<typename T>
-	TOGFutureState<T>* GetTypedState() const
-	{
-		if (!IsValid()) [[unlikely]]
-			return TOGFutureState<T>::GetErrorState();
-		TOGFutureState<T>* TypedState = static_cast<TOGFutureState<T>*>(SharedState.Get());
-		if(!ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type"))) [[unlikely]]
-			return TOGFutureState<T>::GetErrorState();
-		return TypedState;
-	}
+	TOGFutureState<T>* GetTypedState() const;
 	
 	TSharedPtr<FOGFutureState> SharedState = nullptr;
 };
@@ -141,17 +134,9 @@ struct OGASYNC_API FOGPromise
 	}
 
 protected:
-
+	
 	template<typename T>
-	TOGFutureState<T>* GetTypedState() const
-	{
-		if (!IsValid())
-			return TOGFutureState<T>::GetErrorState();
-		TOGFutureState<T>* TypedState = static_cast<TOGFutureState<T>*>(SharedState.Get());
-		if(!ensureAlwaysMsgf(TypedState, TEXT("Tried to access FutureState with the wrong type")))
-			return TOGFutureState<T>::GetErrorState();
-		return TypedState;
-	}
+	TOGFutureState<T>* GetTypedState() const;
 	
 	//Mutable so the copy constructor can null the src
 	mutable TSharedPtr<FOGFutureState> SharedState = nullptr;
@@ -194,6 +179,9 @@ public:
 
 struct OGASYNC_API FOGFutureState
 {
+	friend struct FOGFuture;
+	friend struct FOGPromise;
+	
 	DECLARE_DELEGATE(FVoidThenDelegate);
 	DECLARE_DELEGATE_OneParam(FCatchDelegate, const FString&);
 
@@ -285,6 +273,8 @@ public:
 	virtual TSharedPtr<FOGFutureState> LazyGetContinuation() const = 0;
 	
 protected:
+
+	virtual const std::type_info& GetInnerTypeInfo() const {return typeid(void); }
 
 	FOGFuture AddVoidThen(const FVoidThenDelegate& Callback) const
 	{
@@ -554,6 +544,8 @@ public:
 	}
 	
 protected:
+	virtual const std::type_info& GetInnerTypeInfo() const override {return typeid(T); }
+	
 	TOGFuture<T> AddThen(const FThenDelegate& Callback) const
 	{
 		switch (State)
@@ -661,12 +653,32 @@ FOGFuture::operator const TOGFuture<T>() const
 }
 
 template <typename T>
+TOGFutureState<T>* FOGFuture::GetTypedState() const
+{
+	if (!IsValid()) [[unlikely]]
+		return TOGFutureState<T>::GetErrorState();
+	if(!ensureAlwaysMsgf(typeid(T) == SharedState.Get()->GetInnerTypeInfo(), TEXT("Tried to access FutureState with the wrong type"))) [[unlikely]]
+		return TOGFutureState<T>::GetErrorState();
+	return static_cast<TOGFutureState<T>*>(SharedState.Get());
+}
+
+template <typename T>
 TOGPromise<T>::~TOGPromise()
 {
 	if (IsValid() && SharedState->IsPending())
 	{
 		SharedState->Throw(TEXT("Promise was destroyed before it was fulfilled or failed"));
 	}
+}
+
+template <typename T>
+TOGFutureState<T>* FOGPromise::GetTypedState() const
+{
+	if (!IsValid()) [[unlikely]]
+		return TOGFutureState<T>::GetErrorState();
+	if(!ensureAlwaysMsgf(typeid(T) == SharedState.Get()->GetInnerTypeInfo(), TEXT("Tried to access FutureState with the wrong type"))) [[unlikely]]
+		return TOGFutureState<T>::GetErrorState();
+	return static_cast<TOGFutureState<T>*>(SharedState.Get());
 }
 
 template<typename ReturnsFuture UE_REQUIRES(std::is_convertible_v<TInvokeResult_T<ReturnsFuture>,FOGFuture>)>
