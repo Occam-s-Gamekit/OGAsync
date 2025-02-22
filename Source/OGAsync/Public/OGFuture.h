@@ -161,8 +161,6 @@ template<typename T>
 struct TOGPromise : FOGPromise
 {
 public:
-	typedef TOGFuture<T> TFutureType;
-
 	template<typename NoRawObjectPtr = T UE_REQUIRES(!std::is_convertible_v<T, UObject*>)>
 	TOGPromise() : FOGPromise(MakeShared<TOGFutureState<T>>()) {}
 	~TOGPromise();

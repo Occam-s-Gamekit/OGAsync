@@ -81,152 +81,152 @@ public:
 	static FOGPromise MakePromiseVoid()	{ return MakePromise<void>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseVoid(FOGPromise InPromise) { FulfillPromise(InPromise); }
+	static void FulfillPromiseVoid(const FOGPromise& InPromise) { FulfillPromise(InPromise); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenVoid(FOGFuture InFuture, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, LatentInfo); }
+	static void ThenVoid(const FOGFuture& InFuture, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseBool()	{ return MakePromise<bool>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseBool(FOGPromise InPromise, bool Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseBool(const FOGPromise& InPromise, bool Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenBool(FOGFuture InFuture, bool& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenBool(const FOGFuture& InFuture, bool& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 	
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseBools()	{ return MakePromise<TArray<bool>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseBools(FOGPromise InPromise, const TArray<bool>& Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseBools(const FOGPromise& InPromise, const TArray<bool>& Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenBools(FOGFuture InFuture, TArray<bool>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenBools(const FOGFuture& InFuture, TArray<bool>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 	
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseInt()	{ return MakePromise<int>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseInt(FOGPromise InPromise, int Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseInt(const FOGPromise& InPromise, int Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenInt(FOGFuture InFuture, int& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenInt(const FOGFuture& InFuture, int& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseInts()	{ return MakePromise<TArray<int>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseInts(FOGPromise InPromise, const TArray<int>& Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseInts(const FOGPromise& InPromise, const TArray<int>& Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenInts(FOGFuture InFuture, TArray<int>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenInts(const FOGFuture& InFuture, TArray<int>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseFloat()	{ return MakePromise<float>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseFloat(FOGPromise InPromise, float Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseFloat(const FOGPromise& InPromise, float Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenFloat(FOGFuture InFuture, float& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenFloat(const FOGFuture& InFuture, float& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseFloats()	{ return MakePromise<TArray<float>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseFloats(FOGPromise InPromise, const TArray<float>& Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseFloats(const FOGPromise& InPromise, const TArray<float>& Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenFloats(FOGFuture InFuture, TArray<float>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenFloats(const FOGFuture& InFuture, TArray<float>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseVector()	{ return MakePromise<FVector>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseVector(FOGPromise InPromise, FVector Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseVector(const FOGPromise& InPromise, FVector Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenVector(FOGFuture InFuture, FVector& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenVector(const FOGFuture& InFuture, FVector& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseVectors()	{ return MakePromise<TArray<FVector>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseVectors(FOGPromise InPromise, const TArray<FVector>& Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseVectors(const FOGPromise& InPromise, const TArray<FVector>& Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenVectors(FOGFuture InFuture, TArray<FVector>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenVectors(const FOGFuture& InFuture, TArray<FVector>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseString()	{ return MakePromise<FString>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseString(FOGPromise InPromise, FString Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseString(const FOGPromise& InPromise, FString Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenString(FOGFuture InFuture, FString& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenString(const FOGFuture& InFuture, FString& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseStrings()	{ return MakePromise<TArray<FString>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseStrings(FOGPromise InPromise, const TArray<FString>& Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseStrings(const FOGPromise& InPromise, const TArray<FString>& Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenStrings(FOGFuture InFuture, TArray<FString>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenStrings(const FOGFuture& InFuture, TArray<FString>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseName()	{ return MakePromise<FName>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseName(FOGPromise InPromise, FName Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseName(const FOGPromise& InPromise, FName Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenName(FOGFuture InFuture, FName& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenName(const FOGFuture& InFuture, FName& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseNames()	{ return MakePromise<TArray<FName>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseNames(FOGPromise InPromise, const TArray<FName>& Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseNames(const FOGPromise& InPromise, const TArray<FName>& Value) { FulfillPromise(InPromise, Value); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenNames(FOGFuture InFuture, TArray<FName>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
+	static void ThenNames(const FOGFuture& InFuture, TArray<FName>& OutValue, FLatentActionInfo LatentInfo) { BindToLambda(InFuture, OutValue, LatentInfo); }
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseObject()	{ return MakePromise<TWeakObjectPtr<UObject>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseObject(FOGPromise InPromise, const UObject* Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseObject(const FOGPromise& InPromise, UObject* Value);
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenObject(FOGFuture InFuture, UObject* OutValue, FLatentActionInfo LatentInfo);
+	static void ThenObject(const FOGFuture& InFuture, UObject*& OutValue, FLatentActionInfo LatentInfo);
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseObjects()	{ return MakePromise<TArray<TWeakObjectPtr<UObject>>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseObjects(FOGPromise InPromise, const TArray<UObject*>& Value);
+	static void FulfillPromiseObjects(const FOGPromise& InPromise, const TArray<UObject*>& Value);
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenObjects(FOGFuture InFuture, TArray<UObject*>& OutValue, FLatentActionInfo LatentInfo);
+	static void ThenObjects(const FOGFuture& InFuture, TArray<UObject*>& OutValue, FLatentActionInfo LatentInfo);
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseActor()	{ return MakePromise<TWeakObjectPtr<AActor>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseActor(FOGPromise InPromise, const AActor* Value) { FulfillPromise(InPromise, Value); }
+	static void FulfillPromiseActor(const FOGPromise& InPromise, AActor* Value);
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenActor(FOGFuture InFuture, AActor* OutValue, FLatentActionInfo LatentInfo);
+	static void ThenActor(const FOGFuture& InFuture, AActor*& OutValue, FLatentActionInfo LatentInfo);
 
 	UFUNCTION(BlueprintPure, Category="OGAsync|Promise")
 	static FOGPromise MakePromiseActors()	{ return MakePromise<TArray<TWeakObjectPtr<AActor>>>(); }
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Promise")
-	static void FulfillPromiseActors(FOGPromise InPromise, const TArray<AActor*>& Value);
+	static void FulfillPromiseActors(const FOGPromise& InPromise, const TArray<AActor*>& Value);
 	
 	UFUNCTION(BlueprintCallable, Category="OGAsync|Future", meta=(Latent, LatentInfo="LatentInfo"))
-	static void ThenActors(FOGFuture InFuture, TArray<AActor*>& OutValue, FLatentActionInfo LatentInfo);
+	static void ThenActors(const FOGFuture& InFuture, TArray<AActor*>& OutValue, FLatentActionInfo LatentInfo);
 };

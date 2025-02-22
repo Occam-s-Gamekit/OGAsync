@@ -17,7 +17,13 @@ void UOGFutureBP::ExecuteLatentAction(FLatentActionInfo& LatentInfo)
 	}
 }
 
-void UOGFutureBP::ThenObject(FOGFuture InFuture, UObject* OutValue, FLatentActionInfo LatentInfo)
+void UOGFutureBP::FulfillPromiseObject(const FOGPromise& InPromise, UObject* Value)
+{
+	const TWeakObjectPtr<UObject> WeakObject = Value;
+	FulfillPromise(InPromise, WeakObject);
+}
+
+void UOGFutureBP::ThenObject(const FOGFuture& InFuture, UObject*& OutValue, FLatentActionInfo LatentInfo)
 {
 	const TOGFuture<TWeakObjectPtr<UObject>> Future = InFuture;
 	Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo, &OutValue](const TWeakObjectPtr<UObject>& Result) mutable
@@ -27,7 +33,7 @@ void UOGFutureBP::ThenObject(FOGFuture InFuture, UObject* OutValue, FLatentActio
 	});
 }
 
-void UOGFutureBP::FulfillPromiseObjects(FOGPromise InPromise, const TArray<UObject*>& Value)
+void UOGFutureBP::FulfillPromiseObjects(const FOGPromise& InPromise, const TArray<UObject*>& Value)
 {
 	TArray<TWeakObjectPtr<UObject>> WeakObjArray;
 	for (UObject* Obj : Value)
@@ -37,7 +43,7 @@ void UOGFutureBP::FulfillPromiseObjects(FOGPromise InPromise, const TArray<UObje
 	FulfillPromise<TArray<TWeakObjectPtr<UObject>>>(InPromise, WeakObjArray);
 }
 
-void UOGFutureBP::ThenObjects(FOGFuture InFuture, TArray<UObject*>& OutValue, FLatentActionInfo LatentInfo)
+void UOGFutureBP::ThenObjects(const FOGFuture& InFuture, TArray<UObject*>& OutValue, FLatentActionInfo LatentInfo)
 {
 	const TOGFuture<TArray<TWeakObjectPtr<UObject>>> Future = InFuture;
 	Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo, &OutValue](const TArray<TWeakObjectPtr<UObject>>& Result) mutable
@@ -50,7 +56,15 @@ void UOGFutureBP::ThenObjects(FOGFuture InFuture, TArray<UObject*>& OutValue, FL
 	});
 }
 
-void UOGFutureBP::ThenActor(FOGFuture InFuture, AActor* OutValue, FLatentActionInfo LatentInfo)
+UE_DISABLE_OPTIMIZATION
+void UOGFutureBP::FulfillPromiseActor(const FOGPromise& InPromise, AActor* Value)
+{
+	const TWeakObjectPtr<AActor> WeakActor = Value;
+	FulfillPromise(InPromise, WeakActor);
+}
+
+
+void UOGFutureBP::ThenActor(const FOGFuture& InFuture, AActor*& OutValue, FLatentActionInfo LatentInfo)
 {
 	const TOGFuture<TWeakObjectPtr<AActor>> Future = InFuture;
 	Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo, &OutValue](const TWeakObjectPtr<AActor>& Result) mutable
@@ -59,8 +73,9 @@ void UOGFutureBP::ThenActor(FOGFuture InFuture, AActor* OutValue, FLatentActionI
 		ExecuteLatentAction(LatentInfo);
 	});
 }
+UE_ENABLE_OPTIMIZATION
 
-void UOGFutureBP::FulfillPromiseActors(FOGPromise InPromise, const TArray<AActor*>& Value)
+void UOGFutureBP::FulfillPromiseActors(const FOGPromise& InPromise, const TArray<AActor*>& Value)
 {
 	TArray<TWeakObjectPtr<AActor>> WeakObjArray;
 	for (AActor* Obj : Value)
@@ -70,7 +85,7 @@ void UOGFutureBP::FulfillPromiseActors(FOGPromise InPromise, const TArray<AActor
 	FulfillPromise<TArray<TWeakObjectPtr<AActor>>>(InPromise, WeakObjArray);
 }
 
-void UOGFutureBP::ThenActors(FOGFuture InFuture, TArray<AActor*>& OutValue, FLatentActionInfo LatentInfo)
+void UOGFutureBP::ThenActors(const FOGFuture& InFuture, TArray<AActor*>& OutValue, FLatentActionInfo LatentInfo)
 {
 	const TOGFuture<TArray<TWeakObjectPtr<AActor>>> Future = InFuture;
 	Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo, &OutValue](const TArray<TWeakObjectPtr<AActor>>& Result) mutable
