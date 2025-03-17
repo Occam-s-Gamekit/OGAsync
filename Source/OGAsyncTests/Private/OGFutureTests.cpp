@@ -6,7 +6,7 @@
 #include "OGAsync/Public/OGFuture.h"
 #include "Tests/AutomationCommon.h"
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureBasicTest, "OGAsync.Futures.Basic",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureBasicTest, "OccamsGamekit.OGAsync.Futures.Basic",
                                  EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FOGFutureBasicTest::RunTest(const FString& Parameters)
@@ -167,7 +167,7 @@ bool FOGFutureBasicTest::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureErrorHandlingTest, "OGAsync.Futures.ErrorHandling",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureErrorHandlingTest, "OccamsGamekit.OGAsync.Futures.ErrorHandling",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FOGFutureErrorHandlingTest::RunTest(const FString& Parameters)
@@ -249,7 +249,7 @@ bool FOGFutureErrorHandlingTest::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureContinuationTest, "OGAsync.Futures.Continuation",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureContinuationTest, "OccamsGamekit.OGAsync.Futures.Continuation",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FOGFutureContinuationTest::RunTest(const FString& Parameters)
@@ -351,7 +351,7 @@ bool FOGFutureContinuationTest::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureEdgeCasesTest, "OGAsync.Futures.EdgeCases",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureEdgeCasesTest, "OccamsGamekit.OGAsync.Futures.EdgeCases",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FOGFutureEdgeCasesTest::RunTest(const FString& Parameters)
@@ -389,7 +389,7 @@ bool FOGFutureEdgeCasesTest::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureErrorsDoNotCrash, "OGAsync.Futures.ErrorsDoNotCrash",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureErrorsDoNotCrash, "OccamsGamekit.OGAsync.Futures.ErrorsDoNotCrash",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::NegativeFilter)
 
 bool FOGFutureErrorsDoNotCrash::RunTest(const FString& Parameters)
@@ -428,7 +428,7 @@ bool FOGFutureErrorsDoNotCrash::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureDestructionTest, "OGAsync.Futures.Destruction",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureDestructionTest, "OccamsGamekit.OGAsync.Futures.Destruction",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FOGFutureDestructionTest::RunTest(const FString& Parameters)
@@ -541,7 +541,7 @@ bool FOGFutureDestructionTest::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureAsyncChainTest, "OGAsync.Futures.AsyncChain",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureAsyncChainTest, "OccamsGamekit.OGAsync.Futures.AsyncChain",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FOGFutureAsyncChainTest::RunTest(const FString& Parameters)
@@ -746,7 +746,7 @@ bool FOGFutureAsyncChainTest::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureCombineTest, "OGAsync.Futures.Combine",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOGFutureCombineTest, "OccamsGamekit.OGAsync.Futures.Combine",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FOGFutureCombineTest::RunTest(const FString& Parameters)
