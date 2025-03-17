@@ -3,19 +3,7 @@
 
 #include "OGFutureBP.h"
 
-void UOGFutureBP::ExecuteLatentAction(FLatentActionInfo& LatentInfo)
-{
-	if (LatentInfo.Linkage != INDEX_NONE)
-	{
-		if (UObject* CallbackTarget = LatentInfo.CallbackTarget.Get())
-		{
-			if (UFunction* ExecutionFunction = CallbackTarget->FindFunction(LatentInfo.ExecutionFunction))
-			{
-				CallbackTarget->ProcessEvent(ExecutionFunction, &(LatentInfo.Linkage));
-			}
-		}
-	}
-}
+#include "OGAsyncUtils.h"
 
 void UOGFutureBP::FulfillPromiseObject(const FOGPromise& InPromise, UObject* Value)
 {
@@ -29,7 +17,7 @@ void UOGFutureBP::ThenObject(const FOGFuture& InFuture, UObject*& OutValue, FLat
 	Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo, &OutValue](const TWeakObjectPtr<UObject>& Result) mutable
 	{
 		OutValue = Result.Get();
-		ExecuteLatentAction(LatentInfo);
+		FOGAsyncUtils::ExecuteLatentAction(LatentInfo);
 	});
 }
 
@@ -52,7 +40,7 @@ void UOGFutureBP::ThenObjects(const FOGFuture& InFuture, TArray<UObject*>& OutVa
 		{
 			OutValue.Add(WeakObj.Get());
 		}
-		ExecuteLatentAction(LatentInfo);
+		FOGAsyncUtils::ExecuteLatentAction(LatentInfo);
 	});
 }
 
@@ -70,7 +58,7 @@ void UOGFutureBP::ThenActor(const FOGFuture& InFuture, AActor*& OutValue, FLaten
 	Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo, &OutValue](const TWeakObjectPtr<AActor>& Result) mutable
 	{
 		OutValue = Result.Get();
-		ExecuteLatentAction(LatentInfo);
+		FOGAsyncUtils::ExecuteLatentAction(LatentInfo);
 	});
 }
 UE_ENABLE_OPTIMIZATION
@@ -94,6 +82,6 @@ void UOGFutureBP::ThenActors(const FOGFuture& InFuture, TArray<AActor*>& OutValu
 		{
 			OutValue.Add(WeakObj.Get());
 		}
-		ExecuteLatentAction(LatentInfo);
+		FOGAsyncUtils::ExecuteLatentAction(LatentInfo);
 	});
 }

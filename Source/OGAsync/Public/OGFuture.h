@@ -216,7 +216,7 @@ public:
 	
 	void Throw(const FString& Reason)
 	{
-		if (!ensure(State == EState::Pending) && !FailureReason.IsSet()) [[unlikely]]
+		if (!ensureAlways(State == EState::Pending) && !FailureReason.IsSet()) [[unlikely]]
 			return;
 
 		FailureReason.Emplace(Reason);
@@ -247,7 +247,7 @@ public:
 	void ExecuteCatchCallbacks()
 	{
 		//Value set but still pending will only happen while delegates are being called.
-		if (!ensure(State == EState::Rejected && FailureReason.IsSet())) [[unlikely]]
+		if (!ensureAlways(State == EState::Rejected && FailureReason.IsSet())) [[unlikely]]
 			return;
 
 		const FString& Reason = FailureReason.GetValue();
@@ -374,7 +374,7 @@ public:
 	
 	void Fulfill()
 	{
-		if(!ensure(State == EState::Pending)) [[unlikely]]
+		if(!ensureAlways(State == EState::Pending)) [[unlikely]]
 			return;
 		
 		State = EState::Fulfilled;
@@ -391,7 +391,7 @@ protected:
 	virtual void ExecuteThenCallbacks() override
 	{
 		//Value set but still pending will only happen while delegates are being called.
-		if (!ensure(State == EState::Fulfilled)) [[unlikely]]
+		if (!ensureAlways(State == EState::Fulfilled)) [[unlikely]]
 			return;
 
 		for (FVoidThenDelegate& VoidThen : VoidThenCallbacks)
@@ -568,7 +568,7 @@ protected:
 	virtual void ExecuteThenCallbacks() override
 	{
 		//Value set but still pending will only happen while delegates are being called.
-		if (!ensure(ResultValue.IsSet() && State == EState::Fulfilled)) [[unlikely]]
+		if (!ensureAlways(ResultValue.IsSet() && State == EState::Fulfilled)) [[unlikely]]
 			return;
 
 		T Result = ResultValue.GetValue();

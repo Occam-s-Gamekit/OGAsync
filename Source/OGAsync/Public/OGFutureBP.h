@@ -4,13 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "OGFuture.h"
+#include "OGAsyncUtils.h"
 #include "OGFutureBP.generated.h"
 
 /**
  * Typed helper functions for blueprint to use promises/futures
  */
 UCLASS()
-class UOGFutureBP : public UBlueprintFunctionLibrary
+class OGASYNC_API UOGFutureBP : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
@@ -50,8 +51,6 @@ public:
 		Inner->Fulfill();
 	}
 	
-	static void ExecuteLatentAction(FLatentActionInfo& LatentInfo);
-	
 	template<typename T>
 	static void BindToLambda(FOGFuture InFuture, T& OutValue, FLatentActionInfo LatentInfo)
 	{
@@ -61,7 +60,7 @@ public:
 		Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo, &OutValue](const T& Result) mutable
 		{
 			OutValue = Result;
-			ExecuteLatentAction(LatentInfo);
+			FOGAsyncUtils::ExecuteLatentAction(LatentInfo);
 		});
 	}
 
@@ -72,7 +71,7 @@ public:
 			return;
 		Future->WeakThen(LatentInfo.CallbackTarget.Get(), [LatentInfo]() mutable
 		{
-			ExecuteLatentAction(LatentInfo);
+			FOGAsyncUtils::ExecuteLatentAction(LatentInfo);
 		});
 	}
 

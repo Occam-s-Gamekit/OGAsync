@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿/// Copyright Occam's Gamekit contributors 2025
 
 #pragma once
 

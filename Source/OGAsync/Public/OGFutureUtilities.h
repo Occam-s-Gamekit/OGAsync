@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿/// Copyright Occam's Gamekit contributors 2025
 
 #pragma once
 
@@ -18,8 +18,8 @@ class OGASYNC_API UOGFutureUtilities : public UObject
 
 public:
 	UFUNCTION(Blueprintcallable, Category="OGAsync|Utility")
-	static FOGFuture FutureAll(const UObject* Context, TArray<FOGFuture> WaitForAll);
+	static FOGFuture FutureAll(const UObject* Context, TArray<FOGFuture>& WaitForAll);
 
 	UFUNCTION(Blueprintcallable, Category="OGAsync|Utility")
-	static FOGFuture FutureAny(const UObject* Context, TArray<FOGFuture> WaitForFirst);
+	static FOGFuture FutureAny(const UObject* Context, TArray<FOGFuture>& WaitForFirst);
 };

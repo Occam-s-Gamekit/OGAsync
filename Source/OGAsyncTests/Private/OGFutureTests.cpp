@@ -1,4 +1,6 @@
-﻿#include "CoreMinimal.h"
+﻿/// Copyright Occam's Gamekit contributors 2025
+
+#include "CoreMinimal.h"
 #include "OGFutureUtilities.h"
 #include "Misc/AutomationTest.h"
 #include "OGAsync/Public/OGFuture.h"

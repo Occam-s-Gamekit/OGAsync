@@ -1,9 +1,9 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿/// Copyright Occam's Gamekit contributors 2025
 
 
 #include "OGFutureUtilities.h"
 
-FOGFuture UOGFutureUtilities::FutureAll(const UObject* Context, TArray<FOGFuture> WaitForAll)
+FOGFuture UOGFutureUtilities::FutureAll(const UObject* Context, TArray<FOGFuture>& WaitForAll)
 {
 	TSharedRef<TOGFutureState<void>> FutureStateAll = MakeShared<TOGFutureState<void>>();
 	if (WaitForAll.IsEmpty())
@@ -38,7 +38,7 @@ FOGFuture UOGFutureUtilities::FutureAll(const UObject* Context, TArray<FOGFuture
 	return TOGFuture<void>(FutureStateAll);
 }
 
-FOGFuture UOGFutureUtilities::FutureAny(const UObject* Context, TArray<FOGFuture> WaitForFirst)
+FOGFuture UOGFutureUtilities::FutureAny(const UObject* Context, TArray<FOGFuture>& WaitForFirst)
 {
 	TSharedRef<TOGFutureState<void>> FutureStateAny = MakeShared<TOGFutureState<void>>();
 	if (WaitForFirst.IsEmpty())
