@@ -3,8 +3,11 @@
 
 #include "OGFuture.h"
 
+DEFINE_LOG_CATEGORY(LogOGFuture);
+
 TArray<TSharedPtr<FOGFutureState>> ErrorStates;
 const FOGFuture FOGFuture::EmptyFuture(nullptr);
+const FOGPromise FOGPromise::EmptyPromise(nullptr);
 
 FOGFutureState const* FOGFuture::operator->() const
 {

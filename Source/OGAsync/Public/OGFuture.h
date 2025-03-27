@@ -4,7 +4,10 @@
 
 #include "CoreMinimal.h"
 #include <typeinfo>
+
 #include "OGFuture.generated.h"
+
+OGASYNC_API DECLARE_LOG_CATEGORY_EXTERN(LogOGFuture, Log, All);
 
 struct FOGFutureState;
 template<typename T>
@@ -97,14 +100,10 @@ struct TOGFuture : FOGFuture
 {
 	friend struct TOGPromise<T>;
 	typedef T Type;
+	typedef typename TOGFutureState<T>::FThenDelegate FThenDelegate;
 
 public:
-	//Make it difficult to create a future that can never be filled.
-	//If you need an empty TOGFuture variable, you can manually initialize an empty future with
-	//TOGFuture<T> Future(nullptr)
-	//or
-	//TOGFuture<T> Future = FOGFuture::EmptyFuture
-	TOGFuture() = delete;
+	TOGFuture() : FOGFuture(nullptr) {}
 	TOGFuture(const TSharedPtr<FOGFutureState>& FutureState) : FOGFuture(FutureState) {}
 
 	TOGFutureState<T>* operator->() const { return GetTypedState<T>(); }
@@ -119,6 +118,8 @@ struct OGASYNC_API FOGPromise
 	FOGPromise() {}
 	FOGPromise(const TSharedPtr<FOGFutureState>& State) : SharedState(State) {}
 
+	static const FOGPromise EmptyPromise;
+
 	operator FOGFuture() const
 	{
 		return FOGFuture(SharedState);
@@ -132,6 +133,13 @@ struct OGASYNC_API FOGPromise
 	{
 		return SharedState.IsValid();
 	}
+
+	//convert a generic future into a specific type, will error if the type doesn't match the underlying data
+	template<typename T>
+	operator TOGPromise<T>();
+
+	template<typename T>
+	operator const TOGPromise<T>() const;
 
 protected:
 	
@@ -148,11 +156,21 @@ struct TOGPromise : FOGPromise
 public:
 	template<typename NoRawObjectPtr = T UE_REQUIRES(!std::is_convertible_v<T, UObject*>)>
 	TOGPromise() : FOGPromise(MakeShared<TOGFutureState<T>>()) {}
+	TOGPromise(const TSharedPtr<FOGFutureState>& FutureState) : FOGPromise(FutureState) {}
 	~TOGPromise();
-
-	//Promises can not be copied, this is to ensure only one system is expected to fulfill the promise.
-	TOGPromise(const TOGPromise&) = delete;
-	TOGPromise& operator=(const TOGPromise&) = delete;
+	
+	//I would love to delete the copy operations to enforce only one promise per future state, but USTRUCT containing a promise will not compile if copy is deleted. 
+	TOGPromise(const TOGPromise& Other) : FOGPromise(Other.SharedState)
+	{
+		UE_LOG(LogOGFuture, Warning, TEXT("Copying a promise is not advised, it is only supported because otherwise promises inside USTRUCTs won't compile."))
+	}
+	TOGPromise& operator=(const TOGPromise& Other)
+	{
+		UE_LOG(LogOGFuture, Warning, TEXT("Copying a promise is not advised, it is only supported because otherwise promises inside USTRUCTs won't compile."))
+		SharedState = Other.SharedState;
+		return *this;
+	}
+	
 	//Promises can be moved, but it clears the Other promise
 	TOGPromise(const TOGPromise&& Other) noexcept : FOGPromise(Other.SharedState)
 	{
@@ -332,6 +350,8 @@ struct TOGFutureState<void> : FOGFutureState
 	friend struct FOGPromise;
 	friend struct TOGPromise<void>;
 
+	typedef FVoidThenDelegate FThenDelegate;
+	
 	TOGFutureState(){}
 
 public:
@@ -669,6 +689,30 @@ TOGPromise<T>::~TOGPromise()
 	{
 		SharedState->Throw(TEXT("Promise was destroyed before it was fulfilled or failed"));
 	}
+}
+
+template <typename T>
+FOGPromise::operator TOGPromise<T>()
+{
+	if (!IsValid())
+		return TOGPromise<T>(nullptr);
+	if (!ensureAlwaysMsgf(GetTypedState<T>(), TEXT("Trying to type a promise to the wrong type.")))
+	{
+		return TOGPromise<T>(nullptr);
+	}
+	return TOGPromise<T>(SharedState);
+}
+
+template <typename T>
+FOGPromise::operator const TOGPromise<T>() const
+{
+	if (!IsValid())
+		return TOGPromise<T>(nullptr);
+	if (!ensureAlwaysMsgf(GetTypedState<T>(), TEXT("Trying to type a promise to the wrong type.")))
+	{
+		return TOGPromise<T>(nullptr);
+	}
+	return TOGPromise<T>(SharedState);
 }
 
 template <typename T>
